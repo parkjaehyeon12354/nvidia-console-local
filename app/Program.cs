@@ -210,7 +210,7 @@ sealed class MainForm : Form
             using var back = new SolidBrush(picked ? Color.FromArgb(0x2c, 0x2c, 0x2a) : PanelBg);
             using var fore = new SolidBrush(Fg);
             e.Graphics.FillRectangle(back, e.Bounds);
-            e.Graphics.DrawString(models.Items[e.Index].ToString(), models.Font, fore, e.Bounds.X + 2, e.Bounds.Y + 1);
+            e.Graphics.DrawString(models.Items[e.Index]?.ToString() ?? "", models.Font, fore, e.Bounds.X + 2, e.Bounds.Y + 1);
         };
         models.Items.Add(NoModel);
         models.SelectedIndex = 0;

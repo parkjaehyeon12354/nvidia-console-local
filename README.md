@@ -19,7 +19,8 @@ app/   프로그램 소스 (WinForms)
 
 ## 어디에 저장되나
 
-EXE 옆 폴더에 둡니다. 그 폴더가 쓰기 금지면 `%LOCALAPPDATA%\NvidiaConsole` 로 물러섭니다.
+**EXE 옆에는 아무것도 만들지 않습니다.** 바탕화면에 둬도 파일 하나 그대로입니다.
+전부 `%LOCALAPPDATA%\NvidiaConsole` 에 들어갑니다 (창 왼쪽 아래에 경로가 적혀 있습니다).
 
 | 파일 | 내용 |
 |---|---|

@@ -1,4 +1,5 @@
-// 대화와 키를 EXE 옆에 저장한다. 쓰기 금지 폴더(Program Files 등)면 사용자 폴더로 물러선다.
+// 대화와 키는 사용자 폴더(LOCALAPPDATA)에 둔다. EXE 옆에 두면 실행할 때마다 파일이 생겨
+// "EXE 하나"가 깨지고, Program Files 처럼 쓰기 금지인 곳에서는 아예 저장이 안 된다.
 
 using System.Security.Cryptography;
 using System.Text;
@@ -18,28 +19,11 @@ static class Store
 {
     static readonly JsonSerializerOptions Pretty = new() { WriteIndented = true };
 
-    public static string Folder { get; } = Pick();
+    public static string Folder { get; } = Directory.CreateDirectory(
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NvidiaConsole")).FullName;
 
     static string ChatsPath => Path.Combine(Folder, "chats.json");
     static string KeyPath => Path.Combine(Folder, "key.dat");
-
-    static string Pick()
-    {
-        var beside = AppContext.BaseDirectory;
-        try
-        {
-            var probe = Path.Combine(beside, ".write-test");
-            File.WriteAllText(probe, "");
-            File.Delete(probe);
-            return beside;
-        }
-        catch (Exception)
-        {
-            var fallback = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NvidiaConsole");
-            Directory.CreateDirectory(fallback);
-            return fallback;
-        }
-    }
 
     public static List<Chat> Load()
     {
