@@ -48,6 +48,9 @@ sealed class MainForm : Form
     readonly Label status = new();
     readonly Button send = new();
 
+    // 항목이 하나도 없으면 시스템이 흰 상자를 그린다. 안내 문구를 기본 항목으로 두면 색도 맞고 이유도 보인다.
+    const string NoModel = "모델 없음 — 키를 넣으세요";
+
     List<Chat> chats = Store.Load();
     Chat current = new();
     CancellationTokenSource? streaming;
@@ -71,6 +74,9 @@ sealed class MainForm : Form
             FixedPanel = FixedPanel.Panel1,
         };
         Controls.Add(split);
+        split.Panel1MinSize = 200;
+        // SplitterDistance 를 폼이 실제 크기를 갖기 전에 넣으면 현재 폭에 맞춰 잘린다 — 배치가 끝난 뒤에 준다
+        Load += (_, _) => split.SplitterDistance = 260;
         split.Panel1.Controls.Add(BuildSidebar());
         split.Panel2.Controls.Add(BuildMain());
 
@@ -195,6 +201,19 @@ sealed class MainForm : Form
         models.BackColor = PanelBg;
         models.ForeColor = Fg;
         models.FlatStyle = FlatStyle.Flat;
+        // DropDownList 는 배경색 지정을 무시하고 시스템 색으로 그린다 — 직접 그려야 어두워진다
+        models.DrawMode = DrawMode.OwnerDrawFixed;
+        models.DrawItem += (_, e) =>
+        {
+            if (e.Index < 0) return;
+            var picked = (e.State & DrawItemState.Selected) != 0;
+            using var back = new SolidBrush(picked ? Color.FromArgb(0x2c, 0x2c, 0x2a) : PanelBg);
+            using var fore = new SolidBrush(Fg);
+            e.Graphics.FillRectangle(back, e.Bounds);
+            e.Graphics.DrawString(models.Items[e.Index].ToString(), models.Font, fore, e.Bounds.X + 2, e.Bounds.Y + 1);
+        };
+        models.Items.Add(NoModel);
+        models.SelectedIndex = 0;
         bottom.Controls.Add(models, 1, 1);
 
         panel.Controls.Add(bottom, 0, 2);
@@ -343,6 +362,9 @@ sealed class MainForm : Form
         }
         catch (Exception ex)
         {
+            models.Items.Clear();
+            models.Items.Add(NoModel);
+            models.SelectedIndex = 0;
             status.Text = "모델 목록 실패: " + ex.Message;
         }
     }
@@ -354,7 +376,7 @@ sealed class MainForm : Form
         if (text.Length == 0) return;
         var key = keyBox.Text.Trim();
         if (key.Length == 0) { MessageBox.Show(this, "API 키를 먼저 넣어주세요.", Text); return; }
-        if (models.SelectedItem is not string model || model.Length == 0) { MessageBox.Show(this, "모델을 먼저 골라주세요.", Text); return; }
+        if (models.SelectedItem is not string model || model.Length == 0 || model == NoModel) { MessageBox.Show(this, "모델을 먼저 골라주세요.", Text); return; }
 
         input.Clear();
         // 답변을 받는 도중 다른 대화를 열어도 답변은 시작한 대화에 붙는다
