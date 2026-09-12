@@ -1,0 +1,2 @@
+# 줄바꿈은 LF 로 고정한다 (WSL·macOS 를 섞어 쓴다)
+* text=auto eol=lf

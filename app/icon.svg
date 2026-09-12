@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- 앱 본문 색(--bg)과 강조색(--accent). ✳ 를 글자로 쓰지 않고 선으로 그린다 —
+       Windows 는 U+2733 을 초록 이모지로 바꿔 그리는 경우가 있다. -->
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#1b1b1a"/>
+  <g stroke="#d97757" stroke-width="22" stroke-linecap="round" transform="translate(128 128)">
+    <line x1="0" y1="-72" x2="0" y2="72"/>
+    <line x1="-72" y1="0" x2="72" y2="0"/>
+    <line x1="-51" y1="-51" x2="51" y2="51"/>
+    <line x1="-51" y1="51" x2="51" y2="-51"/>
+  </g>
+</svg>

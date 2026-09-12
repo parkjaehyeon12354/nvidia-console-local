@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    NVIDIA 코딩 콘솔 (로컬판).
+    빌드:  dotnet publish -c Release   →  dist\NvidiaConsole.exe 와 dist\web\
+    실행에는 .NET 10 데스크톱 런타임과 WebView2 런타임이 필요하다.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <AssemblyName>NvidiaConsole</AssemblyName>
+    <RootNamespace>NvidiaConsole</RootNamespace>
+    <Product>NVIDIA 코딩 콘솔 (로컬)</Product>
+    <AssemblyTitle>NVIDIA 코딩 콘솔 (로컬)</AssemblyTitle>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishDir>dist\</PublishDir>
+    <DebugType>embedded</DebugType>
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+  </PropertyGroup>
+
+  <!-- 웹사이트는 EXE 안에 넣지 않는다. exe 옆 web\ 폴더로 따로 복사해 두고, 고치면 바로 반영되게 한다. -->
+  <ItemGroup>
+    <Content Include="..\web\**\*" Link="web\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+  </ItemGroup>
+
+</Project>

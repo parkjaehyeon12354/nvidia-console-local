@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NVIDIA 코딩 콘솔</title>
+<!-- 파비콘을 비워둔다. 없으면 브라우저가 /favicon.ico 를 요청하고, 정적 자산이 아니라서
+     Worker 로 떨어져 로그인 전엔 401 · 후엔 404 로 콘솔을 더럽히고 요청 한 번을 낭비한다. -->
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #1b1b1a;
+    --side: #131312;
+    --panel: #232322;
+    --raise: #2c2c2a;
+    --line: #333331;
+    --fg: #e8e6e3;
+    --dim: #918e88;
+    --faint: #6b6863;
+    --accent: #d97757;
+    --code: #0f0f0e;
+    --ok: #6fbf73;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg); color: var(--fg);
+    font: 14.5px/1.7 ui-sans-serif, system-ui, "Segoe UI", "Malgun Gothic", sans-serif;
+    display: grid; grid-template-columns: 264px 1fr;
+    overflow: hidden;
+  }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { background: none; border: 0; cursor: pointer; }
+
+  /* ── 사이드바 ───────────────────────────────── */
+  .side {
+    background: var(--side); border-right: 1px solid var(--line);
+    display: grid; grid-template-rows: auto auto auto auto 1fr auto;
+    min-height: 0;
+  }
+  .side-icons { display: flex; gap: .15rem; padding: .55rem .5rem; color: var(--dim); }
+  .side-icons button { padding: .35rem .45rem; border-radius: .4rem; line-height: 1; }
+  .side-icons button:hover { background: var(--raise); color: var(--fg); }
+
+  .seg { display: flex; gap: .3rem; padding: 0 .55rem .5rem; }
+  .seg button {
+    flex: 1; padding: .4rem; border-radius: .45rem; font-size: .8rem;
+    color: var(--dim); border: 1px solid transparent;
+  }
+  .seg button.on { background: var(--raise); color: var(--fg); border-color: var(--line); }
+
+  .nav { padding: .2rem .55rem .5rem; display: flex; flex-direction: column; gap: .1rem; }
+  .nav button {
+    display: flex; align-items: center; gap: .55rem; width: 100%;
+    padding: .38rem .5rem; border-radius: .45rem; font-size: .87rem; color: var(--fg);
+  }
+  .nav button:hover { background: var(--raise); }
+  .nav .ico { width: 1rem; text-align: center; color: var(--dim); font-size: .9rem; }
+  .badge {
+    margin-left: auto; font-size: .7rem; padding: .05rem .3rem;
+    border-radius: .25rem; background: var(--raise); color: var(--dim);
+  }
+
+  .sec {
+    display: flex; align-items: center; padding: .7rem .95rem .3rem;
+    font-size: .74rem; color: var(--faint); letter-spacing: .04em;
+  }
+  .sec button { margin-left: auto; color: var(--faint); padding: 0 .25rem; font-size: .95rem; }
+  .sec button:hover { color: var(--fg); }
+
+  .chats { overflow-y: auto; padding: 0 .55rem .5rem; min-height: 0; }
+  .chat {
+    display: flex; align-items: center; gap: .55rem; width: 100%;
+    padding: .35rem .5rem; border-radius: .45rem;
+    font-size: .87rem; color: var(--dim); text-align: left;
+  }
+  .chat:hover { background: var(--raise); color: var(--fg); }
+  .chat.on { background: var(--raise); color: var(--fg); }
+  .dot {
+    width: .42rem; height: .42rem; border-radius: 50%; flex: none;
+    border: 1px solid var(--faint);
+  }
+  .chat.on .dot { background: var(--accent); border-color: var(--accent); }
+  .chat span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chat .x { margin-left: auto; color: var(--faint); opacity: 0; padding: 0 .15rem; }
+  .chat:hover .x { opacity: 1; }
+  .chat .x:hover { color: var(--accent); }
+  /* 터치 기기엔 hover 가 없어 × 가 영영 안 보인다 — 항상 보여준다 */
+  @media (hover: none) { .chat .x { opacity: 1; } }
+
+  .side-foot { border-top: 1px solid var(--line); padding: .6rem .7rem; display: grid; gap: .5rem; }
+  .keyrow { display: flex; align-items: center; gap: .45rem; }
+  .keyrow input {
+    flex: 1; min-width: 0; background: var(--panel); border: 1px solid var(--line);
+    border-radius: .45rem; padding: .35rem .55rem; font-size: .8rem;
+  }
+  .keyrow input:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+  .who { display: flex; align-items: center; gap: .5rem; font-size: .8rem; color: var(--dim); }
+  .av {
+    width: 1.5rem; height: 1.5rem; border-radius: 50%; flex: none;
+    background: var(--accent); color: #2a0f06;
+    display: grid; place-items: center; font-size: .75rem; font-weight: 700;
+  }
+  #whoami { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who a { margin-left: auto; flex: none; color: var(--faint); font-size: .75rem; text-decoration: none; }
+  .who a:hover { color: var(--accent); }
+
+  /* ── 본문 ───────────────────────────────────── */
+  .main { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; min-width: 0; }
+
+  .top {
+    display: flex; align-items: center; gap: .5rem;
+    padding: .6rem 1rem; border-bottom: 1px solid var(--line);
+  }
+  .top .doc { color: var(--dim); }
+  .top h1 { font-size: .92rem; font-weight: 500; margin: 0; }
+  .tag {
+    font-size: .7rem; padding: .1rem .4rem; border-radius: .3rem;
+    background: var(--raise); color: var(--dim);
+  }
+  .top .right { margin-left: auto; display: flex; gap: .2rem; color: var(--dim); }
+  .top .right button { padding: .3rem .4rem; border-radius: .35rem; }
+  .top .right button:hover { background: var(--raise); color: var(--fg); }
+
+  .log { overflow-y: auto; padding: 1.6rem 1rem 2rem; min-height: 0; }
+  .wrap { max-width: 46rem; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; }
+
+  .msg { min-width: 0; }
+  .msg.user .bubble {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: .7rem; padding: .6rem .85rem; color: var(--fg);
+    margin-left: auto; max-width: 85%; width: fit-content;
+  }
+  .msg.ai { display: grid; grid-template-columns: 1.6rem 1fr; gap: .85rem; }
+  .star { color: var(--accent); font-size: 1rem; line-height: 1.6; }
+  .body { min-width: 0; }
+  .body p { margin: 0 0 .85rem; white-space: pre-wrap; word-break: break-word; }
+  .body p:last-child { margin-bottom: 0; }
+  /* 본문은 크롬과 달리 위계가 필요하다 — 1.25 이상 간격을 둔다 (1.28 / 1.0 / .87) */
+  .body h3 { font-size: 1.28rem; font-weight: 600; margin: 1.5rem 0 .6rem; line-height: 1.35; }
+  .body h4 { font-size: 1rem; font-weight: 600; margin: 1.2rem 0 .5rem; color: var(--dim); }
+  .body h3:first-child, .body h4:first-child { margin-top: 0; }
+
+  .block { margin: .9rem 0; border: 1px solid var(--line); border-radius: .6rem; overflow: hidden; background: var(--code); }
+  .bar {
+    display: flex; align-items: center; padding: .35rem .5rem .35rem .75rem;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+    font-size: .74rem; color: var(--faint);
+  }
+  .acts { margin-left: auto; display: flex; gap: .15rem; }
+  .acts button {
+    padding: .2rem .45rem; border-radius: .35rem; font-size: .74rem; color: var(--dim);
+  }
+  .acts button:hover { background: var(--raise); color: var(--fg); }
+  pre { margin: 0; padding: .8rem .75rem; overflow-x: auto; }
+  code { font: 12.5px/1.65 ui-monospace, "Cascadia Code", Consolas, monospace; }
+
+  .hint { color: var(--faint); font-size: .87rem; }
+
+  /* ── 컴포저 ─────────────────────────────────── */
+  .foot { padding: 0 1rem 1rem; }
+  .composer {
+    max-width: 46rem; margin: 0 auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: .8rem;
+    padding: .5rem .6rem .4rem;
+  }
+  .composer:focus-within { border-color: #4a4a46; }
+  .qrow { display: flex; align-items: flex-end; gap: .5rem; }
+  #q {
+    flex: 1; background: none; border: 0; resize: none; outline: none;
+    padding: .25rem .2rem; min-height: 1.7rem; max-height: 38vh; line-height: 1.6;
+  }
+  #q::placeholder { color: var(--faint); }
+  #send {
+    flex: none; width: 1.85rem; height: 1.85rem; border-radius: .45rem;
+    background: var(--raise); color: var(--dim); display: grid; place-items: center;
+  }
+  #send:not(:disabled):hover { background: var(--accent); color: #2a0f06; }
+  #send:disabled { opacity: .45; cursor: default; }
+
+  .crow { display: flex; align-items: center; gap: .4rem; padding-top: .35rem; }
+  .pill {
+    display: inline-flex; align-items: center; gap: .35rem;
+    font-size: .8rem; color: var(--dim); padding: .2rem .5rem;
+    border-radius: .4rem;
+  }
+  .pill:hover { background: var(--raise); }
+  .live { width: .4rem; height: .4rem; border-radius: 50%; background: var(--faint); }
+  .live.on { background: var(--ok); }
+  .crow .right { margin-left: auto; display: flex; align-items: center; gap: .4rem; }
+  #model {
+    background: none; border: 0; color: var(--dim); font-size: .8rem;
+    padding: .2rem .3rem; border-radius: .4rem; max-width: 15rem; outline: none;
+  }
+  #model:hover { background: var(--raise); }
+  #model option { background: var(--panel); color: var(--fg); }
+  .spin {
+    width: .8rem; height: .8rem; border-radius: 50%;
+    border: 1.5px solid var(--line); border-top-color: var(--accent);
+    animation: sp .7s linear infinite; display: none;
+  }
+  .spin.on { display: block; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+
+  dialog {
+    width: min(92vw, 62rem); height: 82vh; padding: 0; color: var(--fg);
+    background: var(--panel); border: 1px solid var(--line); border-radius: .7rem;
+  }
+  dialog::backdrop { background: #000a; }
+  dialog form { display: flex; justify-content: flex-end; padding: .45rem; border-bottom: 1px solid var(--line); }
+  dialog form button { padding: .25rem .7rem; border-radius: .4rem; color: var(--dim); font-size: .8rem; }
+  dialog form button:hover { background: var(--raise); color: var(--fg); }
+  dialog iframe { width: 100%; height: calc(100% - 2.7rem); border: 0; background: #fff; }
+
+  /* 모바일 메뉴 버튼과 가림막은 넓은 화면에선 없다 */
+  .top .menu { display: none; padding: .3rem .45rem; border-radius: .35rem; color: var(--dim); }
+  .top .menu:hover { background: var(--raise); color: var(--fg); }
+  .scrim { display: none; }
+
+  /* 좁은 화면: 사이드바를 숨기지 않고 서랍으로 연다.
+     API 키 입력 · 대화 목록 · 로그아웃이 전부 사이드바에 있어서, 숨기면 폰에서는 앱을 아예 못 쓴다. */
+  @media (max-width: 820px) {
+    body { grid-template-columns: 1fr; }
+    .side {
+      position: fixed; inset: 0 auto 0 0; z-index: 15; width: min(84vw, 300px);
+      transform: translateX(-100%); visibility: hidden;
+      /* 닫힐 때는 밀려나는 게 끝난 뒤에 숨긴다. visibility 가 있어야 닫힌 서랍에 Tab 포커스가 안 들어간다 */
+      transition: transform .22s ease, visibility 0s linear .22s;
+    }
+    body.nav-open .side { transform: none; visibility: visible; transition: transform .22s ease; }
+    .scrim { position: fixed; inset: 0; z-index: 14; background: #0009; }
+    body.nav-open .scrim { display: block; }
+    .top .menu { display: grid; place-items: center; }
+    /* iOS 사파리는 16px 미만 입력칸에 포커스하면 화면을 확대한다. 각 칸의 기존 크기 지정보다 우선해야 해서 id 로 건다 */
+    #key, #q, #model { font-size: 16px; }
+  }
+  @media (max-width: 820px) and (prefers-reduced-motion: reduce) {
+    .side, body.nav-open .side { transition: none; }
+  }
+  /* iOS 사파리에서 100% 높이는 하단 툴바까지 포함해 입력창이 툴바 뒤로 숨는다 */
+  @supports (height: 100dvh) {
+    body { height: 100dvh; }
+  }
+</style>
+
+<aside class="side" id="side">
+  <div class="side-icons">
+    <button title="메뉴">☰</button>
+    <button title="패널">▤</button>
+    <button title="검색">⌕</button>
+    <button title="뒤로">←</button>
+    <button title="앞으로">→</button>
+  </div>
+
+  <div class="seg">
+    <button>채팅</button>
+    <button class="on">&lt;/&gt; Code</button>
+  </div>
+
+  <nav class="nav">
+    <button id="new"><span class="ico">＋</span>새로 생성</button>
+    <button id="reload"><span class="ico">↻</span>모델 새로고침<span class="badge" id="mcount">–</span></button>
+  </nav>
+
+  <div class="sec">대화 <button id="new2" title="새 대화">＋</button></div>
+  <div class="chats" id="chats"></div>
+
+  <div class="side-foot">
+    <div class="keyrow">
+      <input id="key" type="password" placeholder="nvapi-… 키" autocomplete="off">
+    </div>
+    <div class="who"><span class="av" id="av">✳</span><span id="whoami">이 PC 에만 저장됩니다</span></div>
+  </div>
+</aside>
+<div class="scrim" id="scrim"></div>
+
+<div class="main">
+  <header class="top">
+    <button class="menu" id="menu" aria-label="메뉴 열기" aria-controls="side" aria-expanded="false">☰</button>
+    <span class="doc">▤</span>
+    <h1 id="title">새 대화</h1>
+    <span class="tag">로컬</span>
+    <div class="right">
+      <button id="clear" title="대화 비우기">⌫</button>
+    </div>
+  </header>
+
+  <div class="log"><div class="wrap" id="log"></div></div>
+
+  <footer class="foot">
+    <div class="composer">
+      <div class="qrow">
+        <textarea id="q" rows="1" placeholder="무엇을 만들까요?"></textarea>
+        <button id="send" title="전송 (Enter)">↵</button>
+      </div>
+      <div class="crow">
+        <span class="pill"><span class="live" id="live"></span><span id="livetext">키 없음</span></span>
+        <div class="right">
+          <select id="model"><option value="">모델</option></select>
+          <span class="spin" id="spin"></span>
+        </div>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<dialog id="preview">
+  <form method="dialog"><button>닫기</button></form>
+  <iframe id="frame" sandbox="allow-scripts"></iframe>
+</dialog>
+
+<script>
+
+const PROXY = ''; // EXE 안의 로컬 서버가 페이지와 /v1/* 를 모두 낸다 — 동일 출처
+
+const $ = id => document.getElementById(id);
+const key = $('key'), model = $('model'), log = $('log'), q = $('q'), send = $('send');
+
+// file:// 이나 data: 오리진, 쿠키 차단 브라우저에서는 localStorage 접근 자체가 던진다.
+// 호출부마다 try 를 두르는 대신 여기서 한 번만 막는다 — 저장이 안 될 뿐 앱은 계속 돈다.
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* 저장 불가 오리진 */ } },
+};
+
+// ── 대화 (이 PC 에만 저장) ─────────────────────────────────
+// 서버도 계정도 없다. 대화는 EXE 옆 브라우저 프로필의 저장소에만 쌓인다.
+let chats = [];
+let cur = null;
+try { chats = JSON.parse(store.get('nv-chats')) || []; } catch (e) { chats = []; }
+
+function save() {
+  store.set('nv-chats', JSON.stringify(chats));
+  // 저장이 막힌 상태면 조용히 사라지는 대신 바로 드러나게 한다
+  if (store.get('nv-chats') === null) throw new Error('브라우저 저장소를 쓸 수 없습니다');
+}
+
+function newChat() {
+  cur = { id: crypto.randomUUID(), title: '새 대화', messages: [] };
+  drawChats(); drawLog();
+}
+
+function openChat(id) {
+  const found = chats.find(c => c.id === id);
+  if (!found) return;
+  cur = found;
+  drawChats(); drawLog();
+}
+
+// 목록 맨 앞으로 올려 최신순을 유지한다
+function saveChat(c) {
+  chats = [c].concat(chats.filter(o => o.id !== c.id));
+  save();
+  drawChats();
+}
+
+function deleteChat(id) {
+  chats = chats.filter(o => o.id !== id);
+  save();
+  if (cur && cur.id === id) newChat(); else drawChats();
+}
+
+function drawChats() {
+  $('chats').innerHTML = '';
+  chats.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'chat' + (cur && c.id === cur.id ? ' on' : '');
+    const dot = document.createElement('span'); dot.className = 'dot';
+    const t = document.createElement('span'); t.textContent = c.title;
+    const x = document.createElement('span'); x.className = 'x'; x.textContent = '×';
+    x.onclick = e => { e.stopPropagation(); deleteChat(c.id); };
+    b.append(dot, t, x);
+    b.onclick = () => openChat(c.id);
+    $('chats').append(b);
+  });
+}
+
+// ── 렌더링 ──────────────────────────────────────────────────
+function addMsg(who) {
+  const el = document.createElement('div');
+  el.className = 'msg ' + who;
+  let body;
+  if (who === 'user') {
+    body = document.createElement('div');
+    body.className = 'bubble';
+    el.append(body);
+  } else {
+    const star = document.createElement('div');
+    star.className = 'star';
+    star.textContent = '✳';
+    body = document.createElement('div');
+    body.className = 'body';
+    el.append(star, body);
+  }
+  log.append(el);
+  el.scrollIntoView({ block: 'end' });
+  return body;
+}
+
+// 코드펜스 사이의 산문. 마크다운 전체를 파싱하지 않고 제목 줄만 승격시킨다 —
+// 본문이 전부 한 크기로 깔리면 긴 답변에서 구조가 안 보인다.
+function prose(target, text) {
+  let buf = [];
+  const flush = () => {
+    const t = buf.join('\n').trim();
+    buf = [];
+    if (!t) return;
+    const p = document.createElement('p');
+    p.textContent = t;
+    target.append(p);
+  };
+  text.split('\n').forEach(line => {
+    const h = /^(#{1,6})\s+(.+)$/.exec(line);
+    if (!h) { buf.push(line); return; }
+    flush();
+    const el = document.createElement(h[1].length <= 2 ? 'h3' : 'h4');
+    el.textContent = h[2].trim();
+    target.append(el);
+  });
+  flush();
+}
+
+// 코드펜스만 구분해서 그린다. 마크다운 파서를 붙일 만큼 복잡하지 않다.
+// 모델 출력은 전부 textContent 로만 넣는다 — innerHTML 로 넣으면 그대로 XSS 다.
+function render(target, text) {
+  target.innerHTML = '';
+  text.split('```').forEach((chunk, i) => {
+    if (i % 2 === 0) {
+      if (chunk.trim()) prose(target, chunk);
+      return;
+    }
+    const nl = chunk.indexOf('\n');
+    const lang = (nl < 0 ? '' : chunk.slice(0, nl)).trim().toLowerCase();
+    const code = nl < 0 ? chunk : chunk.slice(nl + 1);
+
+    const box = document.createElement('div'); box.className = 'block';
+    const bar = document.createElement('div'); bar.className = 'bar';
+    const name = document.createElement('span'); name.textContent = lang || 'text';
+    const acts = document.createElement('span'); acts.className = 'acts';
+    bar.append(name, acts);
+
+    const pre = document.createElement('pre');
+    const c = document.createElement('code');
+    c.textContent = code;
+    pre.append(c);
+    box.append(bar, pre);
+
+    const copy = document.createElement('button');
+    copy.textContent = '⧉ 복사';
+    copy.onclick = () => {
+      navigator.clipboard.writeText(code);
+      copy.textContent = '복사됨';
+      setTimeout(() => { copy.textContent = '⧉ 복사'; }, 1200);
+    };
+    acts.append(copy);
+
+    if (/^(html|svg)$/.test(lang) || /<html|<!doctype/i.test(code)) {
+      const run = document.createElement('button');
+      run.textContent = '▷ 미리보기';
+      run.onclick = () => {
+        // srcdoc + sandbox(allow-scripts 만): 생성된 코드가 부모 문서나 localStorage 의 키에 닿지 못한다
+        $('frame').srcdoc = code;
+        $('preview').showModal();
+      };
+      acts.append(run);
+    }
+    target.append(box);
+  });
+  target.scrollIntoView({ block: 'end' });
+}
+
+function drawLog() {
+  log.innerHTML = '';
+  $('title').textContent = cur ? cur.title : '새 대화';
+  if (!cur || !cur.messages.length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = 'NVIDIA API 키를 넣으면 모델 목록이 채워집니다. 코드 블록은 복사할 수 있고, HTML 블록은 미리보기로 바로 실행됩니다.';
+    log.append(p);
+    return;
+  }
+  cur.messages.forEach(m => render(addMsg(m.role === 'user' ? 'user' : 'ai'), m.content));
+}
+
+// ── 키 · 모델 ───────────────────────────────────────────────
+key.value = store.get('nvapi') || '';
+key.oninput = () => { store.set('nvapi', key.value.trim()); liveState(); };
+
+function liveState() {
+  const on = !!key.value.trim();
+  $('live').className = 'live' + (on ? ' on' : '');
+  $('livetext').textContent = on ? '연결됨' : '키 없음';
+}
+
+const api = (path, opts) => fetch(PROXY + path, Object.assign({}, opts, {
+  headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key.value.trim() },
+}));
+
+async function loadModels() {
+  if (!key.value.trim()) return;
+  $('mcount').textContent = '…';
+  try {
+    const r = await api('/v1/models');
+    if (!r.ok) throw new Error('HTTP ' + r.status + (r.status === 401 ? ' 키 확인' : ''));
+    // 목록에는 채팅이 안 되는 모델이 섞여 있다 — 임베딩·리랭커·리워드·세이프티가드·
+    // OCR/파싱·CLIP. 그대로 두면 골랐을 때 그냥 실패한다.
+    // ponytail: 이름 기반 블록리스트. NVIDIA 가 카탈로그를 바꾸면 새는데, /v1/models 가
+    // 용도를 안 알려주므로 이게 최선이다. 새는 게 보이면 패턴을 추가할 것.
+    const NOT_CHAT = /(embed|retriev|rerank|reward|guard|content-safety|nvclip|deplot|parse|detector)/i;
+    const ids = (await r.json()).data.map(m => m.id).filter(i => !NOT_CHAT.test(i)).sort();
+
+    model.innerHTML = '';
+    ids.forEach(id => model.append(new Option(id, id)));
+
+    // 알파벳순 첫 항목(01-ai/yi-large)은 기본값으로 나쁘다. 사고 토큰 문제가 없는
+    // 평범한 instruct 모델 중에서 고른다 — 없으면 그냥 첫 항목.
+    const PREFER = [
+      'nvidia/llama-3.1-nemotron-70b-instruct',
+      'mistralai/mistral-large-2-instruct',
+      'mistralai/codestral-22b-instruct-v0.1',
+    ];
+    model.value = PREFER.find(p => ids.includes(p)) || ids[0] || '';
+    $('mcount').textContent = ids.length;
+  } catch (e) {
+    $('mcount').textContent = '!';
+    $('livetext').textContent = e.message;
+  }
+}
+$('reload').onclick = loadModels;
+key.addEventListener('change', loadModels);
+
+// ── 전송 ────────────────────────────────────────────────────
+async function ask() {
+  const text = q.value.trim();
+  if (!text) return;
+  if (!key.value.trim()) return alert('API 키를 먼저 넣어주세요.');
+  if (!model.value) return alert('모델을 먼저 골라주세요.');
+  if (!cur) newChat();
+  // 스트리밍 도중 다른 대화를 열면 cur 가 바뀐다. 끝에서 cur 를 다시 읽으면
+  // 답변이 엉뚱한 대화에 저장되므로, 시작 시점의 대화를 붙잡아 끝까지 쓴다.
+  const chat = cur;
+
+  q.value = ''; q.style.height = 'auto';
+  send.disabled = true; $('spin').className = 'spin on';
+
+  render(addMsg('user'), text);
+  chat.messages.push({ role: 'user', content: text });
+  if (chat.messages.length === 1) {
+    chat.title = text.slice(0, 30);
+    $('title').textContent = chat.title;
+  }
+
+  const out = addMsg('ai');
+  out.textContent = '…';
+  let acc = '';
+
+  try {
+    const r = await api('/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({
+        model: model.value,
+        messages: [{
+          role: 'system',
+          content: '너는 숙련된 개발자다. 코드는 반드시 언어를 명시한 코드펜스로 감싸고, 설명은 간결하게 한국어로 한다.',
+        }].concat(chat.messages),
+        max_tokens: 4096,
+        temperature: 0.4,
+        stream: true,
+      }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' — ' + (await r.text()).slice(0, 300));
+
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const step = await reader.read();
+      if (step.done) break;
+      buf += dec.decode(step.value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();                 // 잘린 마지막 줄은 다음 청크로 넘긴다
+      for (const line of lines) {
+        if (line.indexOf('data: ') !== 0) continue;
+        const d = line.slice(6).trim();
+        if (d === '[DONE]') continue;
+        try {
+          const delta = JSON.parse(d).choices[0].delta;
+          if (delta && delta.content) acc += delta.content;
+        } catch (e) { /* 조각난 JSON 은 버린다 */ }
+      }
+      render(out, acc);
+    }
+
+    if (!acc.trim()) {
+      out.textContent = '(빈 응답) 추론(thinking) 모델이면 사고 토큰이 max_tokens 를 다 먹었을 수 있습니다. 다른 모델로 바꿔보세요.';
+    } else {
+      chat.messages.push({ role: 'assistant', content: acc });
+      try {
+        await saveChat(chat);
+      } catch (e) {
+        // 저장 실패를 조용히 넘기면 새로고침하는 순간 대화가 사라진다 — 반드시 알린다.
+        const warn = document.createElement('p');
+        warn.className = 'hint';
+        warn.textContent = '⚠ 저장 실패 (' + e.message + ') — 새로고침하면 이 대화가 사라집니다.';
+        out.append(warn);
+      }
+    }
+  } catch (e) {
+    out.textContent = '실패: ' + e.message;
+  } finally {
+    send.disabled = false; $('spin').className = 'spin';
+    q.focus();
+  }
+}
+
+send.onclick = ask;
+q.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
+});
+q.addEventListener('input', () => {
+  q.style.height = 'auto';
+  q.style.height = Math.min(q.scrollHeight, window.innerHeight * 0.38) + 'px';
+});
+$('new').onclick = newChat;
+$('new2').onclick = newChat;
+$('clear').onclick = () => {
+  if (!cur) return;
+  // 저장된 대화면 지운다. 비운 채로 두면 "새 대화" 빈 항목만 쌓인다.
+  if (chats.some(c => c.id === cur.id)) deleteChat(cur.id);
+  else newChat();
+};
+
+// ── 모바일 서랍 ─────────────────────────────────────────────
+const setNav = open => {
+  document.body.classList.toggle('nav-open', open);
+  $('menu').setAttribute('aria-expanded', String(open));
+};
+$('menu').onclick = () => setNav(!document.body.classList.contains('nav-open'));
+$('scrim').onclick = () => setNav(false);
+// 서랍 안의 ☰ 도 닫기로 쓴다 — 서랍이 열리면 상단 ☰ 는 가려져서, 손이 가는 건 이쪽이다.
+document.querySelector('.side-icons button[title="메뉴"]').onclick = () => setNav(false);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setNav(false); });
+// 대화를 고르거나 새로 만들면 닫는다. × 는 stopPropagation 이라 여기까지 안 온다 — 여러 개 지우는 동안 열려 있다.
+$('side').addEventListener('click', e => {
+  if (e.target.closest('.chat, #new, #new2')) setNav(false);
+});
+
+// 시작 — 로그인이 없다. 저장된 대화를 그리고, 키가 있으면 모델 목록을 받는다.
+liveState();
+drawChats();
+newChat();
+if (key.value) loadModels();
+</script>
+</html>

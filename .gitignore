@@ -1,0 +1,7 @@
+# 빌드 산출물
+app/bin/
+app/obj/
+app/dist/
+
+# 실행하면 EXE 옆에 생기는 브라우저 프로필
+*.WebView2/
