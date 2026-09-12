@@ -327,12 +327,10 @@ sealed class MainForm : Form
 
     // 항목이 하나도 없으면 시스템이 흰 상자를 그린다. 안내 문구를 기본 항목으로 두면 색도 맞고 이유도 보인다.
     const string NoModel = "모델 없음 — 키를 넣으세요";
-    const string Hint = "무엇을 만들까요?   Enter 전송 · Shift+Enter 줄바꿈";
 
     List<Chat> chats = Store.Load();
     Chat current = new();
     CancellationTokenSource? streaming;
-    bool ghost;     // 입력칸이 안내 문구를 보여주는 중인가
     bool syncing;   // 목록을 다시 채우는 중 — 선택 이벤트를 무시한다
 
     public MainForm()
@@ -354,7 +352,6 @@ sealed class MainForm : Form
         keyBox.Text = Store.LoadKey();
         RefreshList();
         DrawChat();
-        ShowGhost();
         if (keyBox.Text.Length > 0) LoadModels();
         else status.Text = "API 키를 넣으면 모델을 불러옵니다";
     }
@@ -516,13 +513,8 @@ sealed class MainForm : Form
         input.ForeColor = Ui.Fg;
         input.BorderStyle = BorderStyle.None;
         input.ScrollBars = ScrollBars.None;
-        input.LostFocus += (_, _) => ShowGhost();
-        input.GotFocus += (_, _) => { if (ghost) input.Select(0, 0); };
-        // 포커스가 아니라 "실제로 무언가 칠 때" 지운다 — 창을 열자마자 안내가 사라지면 있으나 마나다
-        input.KeyPress += (_, e) => { if (!char.IsControl(e.KeyChar)) ClearGhost(); };
         input.KeyDown += (_, e) =>
         {
-            if (e.KeyCode is Keys.Back or Keys.Delete || (e.Control && e.KeyCode == Keys.V)) ClearGhost();
             if (e.KeyCode == Keys.Enter && !e.Shift)
             {
                 e.SuppressKeyPress = true;
@@ -582,25 +574,6 @@ sealed class MainForm : Form
         };
         b.Width = TextRenderer.MeasureText(text, Ui.Meta).Width + 26;
         return b;
-    }
-
-    // ── 입력칸 안내 문구 ────────────────────────────────────
-    // WinForms TextBox 에는 플레이스홀더가 없다. 비어 있을 때만 흐린 글씨를 넣고 ghost 로 표시해 둔다.
-    void ShowGhost()
-    {
-        if (ghost || input.Text.Length > 0) return;
-        ghost = true;
-        input.ForeColor = Ui.Muted;
-        input.Text = Hint;
-        input.Select(0, 0);   // 포커스를 받으면 전체 선택이 걸려 안내 문구가 파랗게 반전된다
-    }
-
-    void ClearGhost()
-    {
-        if (!ghost) return;
-        ghost = false;
-        input.Text = "";
-        input.ForeColor = Ui.Fg;
     }
 
     // ── 대화 그리기 ─────────────────────────────────────────
@@ -797,7 +770,6 @@ sealed class MainForm : Form
     // ── 보내기 ──────────────────────────────────────────────
     async void Send()
     {
-        if (ghost) return;
         var text = input.Text.Trim();
         if (text.Length == 0) return;
         var key = keyBox.Text.Trim();
