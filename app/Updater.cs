@@ -12,7 +12,8 @@ namespace NvidiaConsole;
 
 static class Updater
 {
-    const string Latest = "https://api.github.com/repos/parkjaehyeon12354/nvidia-console-local/releases/latest";
+    // 레포 이름을 nvidia-console-local → zako-code 로 바꿨다. 옛 주소도 깃허브가 301 로 넘겨 주지만 기대지 않는다.
+    const string Latest = "https://api.github.com/repos/parkjaehyeon12354/zako-code/releases/latest";
     const string AssetName = "ZakoCode.exe";   // 옛 앱(NvidiaConsole.exe 를 찾는)을 위해 릴리스엔 옛 이름으로도 올린다
 
     public static string Current => Application.ProductVersion.Split('+')[0];
