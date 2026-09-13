@@ -19,9 +19,10 @@ static class Updater
 
     public sealed record Release(string Version, string Url);
 
-    static HttpClient Client()
+    // 조회는 금방 끝나야 하고, 내려받기는 런타임을 품은 수십 MB 라 느린 회선에선 30초로 모자란다
+    static HttpClient Client(TimeSpan timeout)
     {
-        var c = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        var c = new HttpClient { Timeout = timeout };
         c.DefaultRequestHeaders.Add("User-Agent", "NvidiaConsole");   // 없으면 깃허브가 403 을 준다
         c.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
         return c;
@@ -29,7 +30,7 @@ static class Updater
 
     public static async Task<Release?> CheckAsync(CancellationToken ct = default)
     {
-        using var http = Client();
+        using var http = Client(TimeSpan.FromSeconds(30));
         using var res = await http.GetAsync(Latest, ct);
         if (!res.IsSuccessStatusCode) return null;
 
@@ -63,7 +64,7 @@ static class Updater
 
     public static async Task<string> DownloadAsync(Release r, CancellationToken ct = default)
     {
-        using var http = Client();
+        using var http = Client(TimeSpan.FromMinutes(10));
         var bytes = await http.GetByteArrayAsync(r.Url, ct);
         if (bytes.Length < 50_000) throw new InvalidOperationException("받은 파일이 너무 작습니다");
 

@@ -4,7 +4,7 @@
     NVIDIA 코딩 콘솔 (로컬판) — 웹페이지 없이 WinForms 로 직접 그리는 프로그램.
     빌드:  dotnet publish -c Release   →  dist\NvidiaConsole.exe (파일 하나)
     확인:  빌드한 exe 에 selftest 옵션을 주면 화면 없이 점검만 하고 끝난다
-    실행에는 .NET 10 데스크톱 런타임이 필요하다.
+    런타임을 품고 있어 .NET 을 따로 깔지 않아도 된다.
   -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -18,12 +18,15 @@
     <RootNamespace>NvidiaConsole</RootNamespace>
     <Product>NVIDIA 코딩 콘솔 (로컬)</Product>
     <AssemblyTitle>NVIDIA 코딩 콘솔 (로컬)</AssemblyTitle>
-    <Version>2.8.0</Version>
+    <Version>2.9.0</Version>
   </PropertyGroup>
 
   <PropertyGroup>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <SelfContained>false</SelfContained>
+    <!-- 런타임까지 EXE 안에 넣는다: 받는 사람이 .NET 을 따로 깔 필요가 없다.
+         대신 파일이 커지므로 압축한다. WinForms 는 트리밍을 지원하지 않아 더 줄이진 못한다. -->
+    <SelfContained>true</SelfContained>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <PublishDir>dist\</PublishDir>

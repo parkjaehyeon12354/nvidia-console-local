@@ -408,7 +408,7 @@ sealed class MainForm : Form
         RefreshList();
         DrawChat();
         if (apiKey.Length > 0 && Nvidia.Root.Length > 0) LoadModels();
-        else status.Text = "왼쪽 아래 설정에서 " + Missing();
+        else status.Text = "설정에서 " + Missing();
 
         Shown += async (_, _) => await CheckUpdate(false);   // 창이 뜬 뒤 조용히 살펴본다
     }
@@ -510,7 +510,7 @@ sealed class MainForm : Form
         head.Controls.Add(updateBtn, 1, 0);
 
         status.AutoSize = false;
-        status.Width = 320;
+        status.Width = 460;   // 안내 문구가 길어져 320 이면 끝 글자가 아랫줄로 떨어진다
         status.Dock = DockStyle.Fill;
         status.Font = Ui.Meta;
         status.ForeColor = Ui.Muted;
