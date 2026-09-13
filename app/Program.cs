@@ -6,7 +6,7 @@
 //
 //   NvidiaConsole.exe                      창을 연다
 //   NvidiaConsole.exe --selftest           화면 없이 자체 점검만 하고 끝낸다 (빌드 후 확인용)
-//   NvidiaConsole.exe --shot a.png [설정]  창을 그림 한 장으로 떠서 끝낸다 (화면 확인용)
+//   NvidiaConsole.exe --shot a.png [설정 [번호]]  창을 그림 한 장으로 떠서 끝낸다 (화면 확인용)
 //
 // --shot 은 화면을 캡처하지 않고 창이 스스로를 그린다. 다른 창이 앞에 있든 상관없고,
 // 남의 화면이 찍힐 일도 없다.
@@ -31,18 +31,19 @@ static class Program
         ApplicationConfiguration.Initialize();
         if (args.Length > 1 && args[0] == "--shot")
         {
-            Environment.Exit(Shot(args[1], args.Length > 2 && args[2] == "설정"));
+            Environment.Exit(Shot(args[1], args.Length > 2 && args[2] == "설정",
+                args.Length > 3 && int.TryParse(args[3], out var n) ? n : 0));
             return;
         }
         Application.Run(new MainForm());
     }
 
-    static int Shot(string path, bool settings)
+    static int Shot(string path, bool settings, int section)
     {
         var form = new MainForm();
         form.Show();
         Settle(form);
-        if (settings) { form.ShowSettings(); Settle(form); }
+        if (settings) { form.ShowSettings(section); Settle(form); }
 
         // 설정이 열려 있으면 창 전체를 덮는 막이 곧 화면이다. 폼째로 뜨면 자식 그리는 순서가
         // 뒤집혀 막이 도로 가려지므로, 그때는 막을 그린다.
@@ -364,6 +365,8 @@ sealed class MainForm : Form
     readonly List<Panel> sections = new();
     readonly List<RoundButton> navs = new();
     Panel? scrim;
+    readonly RoundButton updateBtn = new();
+    readonly Label updateNote = new();
     RoundPanel? sheet;
     Bitmap? frost;
     Action center = () => { };
@@ -404,6 +407,8 @@ sealed class MainForm : Form
         DrawChat();
         if (apiKey.Length > 0) LoadModels();
         else status.Text = "왼쪽 아래 설정에서 API 키를 넣으세요";
+
+        Shown += async (_, _) => await CheckUpdate(false);   // 창이 뜬 뒤 조용히 살펴본다
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -476,8 +481,9 @@ sealed class MainForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 142));
 
         // 머리줄 — 어느 대화를 보고 있는지, 지금 무슨 일이 일어나는지
-        var head = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Ui.Bg, Padding = new Padding(24, 0, 18, 0) };
+        var head = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, BackColor = Ui.Bg, Padding = new Padding(24, 0, 18, 0) };
         head.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        head.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         head.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         heading.Dock = DockStyle.Fill;
         heading.Font = Ui.Strong;
@@ -485,13 +491,29 @@ sealed class MainForm : Form
         heading.TextAlign = ContentAlignment.MiddleLeft;
         heading.AutoEllipsis = true;
         head.Controls.Add(heading, 0, 0);
+
+        // 새 버전을 받아 두면 나타난다. 누르면 끄고 바꿔치운 뒤 다시 켠다.
+        updateBtn.Visible = false;
+        updateBtn.AutoSize = false;
+        updateBtn.Size = new Size(220, 28);
+        updateBtn.Anchor = AnchorStyles.None;
+        updateBtn.Font = Ui.Meta;
+        updateBtn.Radius = 8;
+        updateBtn.Fill = Ui.Accent;
+        updateBtn.Hover = Ui.AccentHi;
+        updateBtn.Down = Ui.Accent;
+        updateBtn.Border = Color.Transparent;
+        updateBtn.ForeColor = Ui.OnAccent;
+        updateBtn.Click += (_, _) => Updater.InstallAndRestart();
+        head.Controls.Add(updateBtn, 1, 0);
+
         status.AutoSize = false;
         status.Width = 320;
         status.Dock = DockStyle.Fill;
         status.Font = Ui.Meta;
         status.ForeColor = Ui.Muted;
         status.TextAlign = ContentAlignment.MiddleRight;
-        head.Controls.Add(status, 1, 0);
+        head.Controls.Add(status, 2, 0);
         root.Controls.Add(head, 0, 0);
 
         root.Controls.Add(new Panel { Dock = DockStyle.Fill, BackColor = Ui.Line }, 0, 1);
@@ -808,8 +830,37 @@ sealed class MainForm : Form
         }
     }
 
-    internal void ShowSettings() => OpenSettings();
+    internal void ShowSettings(int section) { OpenSettings(); ShowSection(section); }
     internal Control? Overlay => scrim;
+
+    // ── 업데이트 ────────────────────────────────────────────
+    // 켤 때 한 번 조용히 살펴본다. 새 것이 있으면 미리 받아 두고 머리줄에 단추만 띄운다 —
+    // 쓰던 중에 프로그램이 저 혼자 꺼졌다 켜지면 곤란하다.
+    async Task CheckUpdate(bool asked)
+    {
+        if (Updater.Ready is not null) { updateNote.Text = "다시 시작하면 적용됩니다"; return; }
+        try
+        {
+            if (asked) updateNote.Text = "확인하는 중…";
+            var found = await Updater.CheckAsync();
+            if (found is null)
+            {
+                if (asked) updateNote.Text = "최신 버전입니다";
+                return;
+            }
+
+            if (asked) updateNote.Text = found.Version + " 받는 중…";
+            Updater.Ready = await Updater.DownloadAsync(found);
+            updateBtn.Text = "새 버전 " + found.Version + " — 다시 시작";
+            updateBtn.Visible = true;
+            updateNote.Text = "새 버전 " + found.Version + " 을 받았습니다";
+        }
+        catch (Exception ex)
+        {
+            // 업데이트가 안 된다고 프로그램을 못 쓸 이유는 없다 — 물어봤을 때만 알린다
+            if (asked) updateNote.Text = "확인 실패: " + ex.Message;
+        }
+    }
 
     void OpenSettings()
     {
@@ -1002,13 +1053,19 @@ sealed class MainForm : Form
     Panel SectionAbout()
     {
         var p = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Bg, Visible = false };
-        var version = (Application.ProductVersion.Split('+')[0]);
         p.Controls.Add(Note("NVIDIA 코딩 콘솔 (로컬판)", Ui.Strong, Ui.Fg, 0, 0, 300, 24));
-        p.Controls.Add(Note("버전 " + version, Ui.Meta, Ui.UserFg, 0, 28, 300, 20));
-        p.Controls.Add(Note("서버도 계정도 없습니다. 대화는 이 PC 에만 남습니다.\n"
-            + "NVIDIA 에 질문을 보낼 때만 인터넷을 씁니다.\n"
-            + "실행에는 .NET 10 데스크톱 런타임이 필요합니다.",
-            Ui.Meta, Ui.Muted, 0, 58, 470, 60));
+        p.Controls.Add(Note("버전 " + Updater.Current, Ui.Meta, Ui.UserFg, 0, 28, 300, 20));
+
+        var check = new RoundButton { Text = "업데이트 확인", Bounds = new Rectangle(0, 60, 120, 28), Font = Ui.Meta, Radius = 8 };
+        check.Click += async (_, _) => await CheckUpdate(true);
+        p.Controls.Add(check);
+
+        updateNote.SetBounds(130, 60, 340, 28);
+        updateNote.Font = Ui.Meta;
+        updateNote.ForeColor = Ui.Muted;
+        updateNote.BackColor = Ui.Bg;
+        updateNote.TextAlign = ContentAlignment.MiddleLeft;
+        p.Controls.Add(updateNote);
         return p;
     }
 
@@ -1146,6 +1203,16 @@ static class SelfTest
             failed += Check("키 암호화 왕복 · 평문 아님", back == "check" && !Encoding.UTF8.GetString(blob).Contains("check"));
         }
         catch (Exception ex) { failed += Check("키 암호화 — " + ex.Message, false); }
+
+        failed += Check("새 버전만 새 것으로 본다",
+            Updater.Newer("v2.6.0", "2.5.0") && !Updater.Newer("v2.5.0", "2.5.0")
+            && !Updater.Newer("v2.4.9", "2.5.0") && !Updater.Newer("최신", "2.5.0"));
+
+        failed += Check("깃허브 https 주소만 내려받는다",
+            Updater.TrustedUrl("https://github.com/a/b/releases/download/v1/x.exe")
+            && Updater.TrustedUrl("https://objects.githubusercontent.com/x")
+            && !Updater.TrustedUrl("http://github.com/a/b/x.exe")
+            && !Updater.TrustedUrl("https://github.com.evil.test/x.exe"));
 
         try
         {
