@@ -8,3 +8,6 @@ app/dist/
 
 # 릴리스용 압축본
 *.zip
+
+# Visual Studio 작업 상태
+.vs/

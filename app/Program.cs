@@ -311,100 +311,6 @@ sealed class ChatList : ListBox
     }
 }
 
-// 설정 창 — 키와 저장 위치. 창을 닫아야 반영된다(취소하면 아무것도 바뀌지 않는다).
-sealed class SettingsForm : Form
-{
-    readonly TextBox key = new();
-
-    public string ApiKey => key.Text.Trim();
-
-    public SettingsForm(string apiKey)
-    {
-        Text = "설정";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
-        ShowInTaskbar = false;
-        StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(520, 300);
-        BackColor = Ui.Bg;
-        ForeColor = Ui.Fg;
-        Font = Ui.Body;
-        Padding = new Padding(24, 20, 24, 20);
-
-        Controls.Add(Label("NVIDIA API 키", Ui.Strong, Ui.Fg, 24, 20, 300));
-        Controls.Add(Label("이 PC 에만 둡니다. Windows 계정으로 암호화해 저장하므로 다른 계정이나 다른 PC 에서는 풀리지 않습니다.",
-            Ui.Meta, Ui.Muted, 24, 46, 472, 34));
-
-        var card = new RoundPanel(Ui.Card, Ui.Bg)
-        {
-            Bounds = new Rectangle(24, 86, 472, 40),
-            Radius = 9,
-            Padding = new Padding(12, 10, 12, 10),
-        };
-        key.Dock = DockStyle.Fill;
-        key.Text = apiKey;
-        key.UseSystemPasswordChar = true;
-        key.BackColor = Ui.Card;
-        key.ForeColor = Ui.Fg;
-        key.BorderStyle = BorderStyle.None;
-        card.Controls.Add(key);
-        Controls.Add(card);
-
-        // 붙여넣은 키가 맞는지 볼 방법이 없으면 오타를 찾을 길이 없다
-        var peek = new RoundButton { Text = "키 보기", Bounds = new Rectangle(24, 134, 90, 28), Font = Ui.Meta, Radius = 8 };
-        peek.Click += (_, _) =>
-        {
-            key.UseSystemPasswordChar = !key.UseSystemPasswordChar;
-            peek.Text = key.UseSystemPasswordChar ? "키 보기" : "키 가리기";
-        };
-        Controls.Add(peek);
-
-        var get = new RoundButton { Text = "키 발급받기", Bounds = new Rectangle(122, 134, 110, 28), Font = Ui.Meta, Radius = 8 };
-        get.Click += (_, _) => Process.Start(new ProcessStartInfo("https://build.nvidia.com") { UseShellExecute = true });
-        Controls.Add(get);
-
-        Controls.Add(Label("저장 위치", Ui.Strong, Ui.Fg, 24, 184, 300));
-        Controls.Add(Label(Store.Folder, Ui.Meta, Ui.Muted, 24, 210, 380, 20));
-
-        var open = new RoundButton { Text = "폴더 열기", Bounds = new Rectangle(406, 206, 90, 28), Font = Ui.Meta, Radius = 8 };
-        open.Click += (_, _) => Process.Start(new ProcessStartInfo(Store.Folder) { UseShellExecute = true });
-        Controls.Add(open);
-
-        var ok = new RoundButton
-        {
-            Text = "확인",
-            Bounds = new Rectangle(406, 252, 90, 32),
-            Fill = Ui.Accent,
-            Hover = Ui.AccentHi,
-            Down = Ui.Accent,
-            Border = Color.Transparent,
-            ForeColor = Ui.OnAccent,
-            DialogResult = DialogResult.OK,
-        };
-        var cancel = new RoundButton { Text = "취소", Bounds = new Rectangle(306, 252, 90, 32), DialogResult = DialogResult.Cancel };
-        Controls.Add(ok);
-        Controls.Add(cancel);
-        AcceptButton = ok;
-        CancelButton = cancel;
-    }
-
-    static Label Label(string text, Font font, Color fore, int x, int y, int w, int h = 20) => new()
-    {
-        Text = text,
-        Font = font,
-        ForeColor = fore,
-        Bounds = new Rectangle(x, y, w, h),
-        BackColor = Ui.Bg,
-    };
-
-    protected override void OnHandleCreated(EventArgs e)
-    {
-        base.OnHandleCreated(e);
-        Native.DarkTitleBar(Handle);
-    }
-}
-
 sealed class MainForm : Form
 {
     readonly ChatList list = new();
@@ -414,6 +320,11 @@ sealed class MainForm : Form
     readonly ContextMenuStrip modelMenu = new();
     string model = "";
     string apiKey = "";
+    readonly TextBox keyBox = new();
+    readonly List<Panel> sections = new();
+    readonly List<RoundButton> navs = new();
+    Panel? scrim;
+    Action center = () => { };
     readonly FlowLayoutPanel codeBar = new();
     readonly Label status = new();
     readonly Label heading = new();
@@ -437,6 +348,9 @@ sealed class MainForm : Form
         BackColor = Ui.Bg;
         ForeColor = Ui.Fg;
         Font = Ui.Body;
+
+        KeyPreview = true;   // 설정이 열려 있을 때 Esc 를 폼이 먼저 본다
+        KeyDown += (_, e) => { if (e.KeyCode == Keys.Escape) CloseSettings(); };
 
         // Fill 을 먼저 넣어야 남은 자리를 가져간다 (도킹은 뒤에 넣은 것부터 자리를 뗀다)
         Controls.Add(BuildMain());
@@ -794,12 +708,34 @@ sealed class MainForm : Form
     }
 
     // ── 모델 ────────────────────────────────────────────────
+    // ── 설정 ────────────────────────────────────────────────
+    // 별도 창을 띄우지 않고 창 안에서 덮는다. 뒤를 비쳐 보이게 하려면 밑에 깔린
+    // 형제 컨트롤과 합성해야 하는데 WinForms 는 그걸 못 하므로, 막은 불투명하게 칠한다.
+
     void OpenSettings()
     {
-        using var dlg = new SettingsForm(apiKey);
-        if (dlg.ShowDialog(this) != DialogResult.OK || dlg.ApiKey == apiKey) return;
+        if (scrim is null) BuildSettings();
+        keyBox.Text = apiKey;
+        ShowSection(0);
+        foreach (Control c in Controls) c.Enabled = c == scrim;   // 뒤로 포커스가 새지 않게
+        scrim!.Bounds = ClientRectangle;
+        center();                       // Resize 가 아직 안 왔을 수 있다
+        scrim.Visible = true;
+        scrim.BringToFront();
+        keyBox.Focus();
+    }
 
-        apiKey = dlg.ApiKey;
+    void CloseSettings()
+    {
+        if (scrim is null || !scrim.Visible) return;
+        scrim.Visible = false;
+        foreach (Control c in Controls) c.Enabled = true;
+        input.Focus();
+
+        var next = keyBox.Text.Trim();
+        if (next == apiKey) return;
+
+        apiKey = next;
         Store.SaveKey(apiKey);
         if (apiKey.Length > 0)
         {
@@ -814,6 +750,178 @@ sealed class MainForm : Form
         }
         if (current.Messages.Count == 0) DrawChat();   // 안내 문구를 지금 상태에 맞춘다
     }
+
+    void ShowSection(int i)
+    {
+        for (var n = 0; n < sections.Count; n++)
+        {
+            sections[n].Visible = n == i;
+            navs[n].Fill = n == i ? Ui.Card : Ui.Bg;
+            navs[n].ForeColor = n == i ? Ui.Fg : Ui.UserFg;
+            navs[n].Invalidate();
+        }
+    }
+
+    void BuildSettings()
+    {
+        // Dock 을 쓰면 안 된다 — BringToFront 가 z 순서를 바꾸는 순간 도킹 순서도 바뀌어
+        // 먼저 자리를 뗀 형제들에게 공간을 다 빼앗기고 크기가 0 이 된다. 앵커는 자리를 다투지 않는다.
+        scrim = new Panel
+        {
+            Bounds = ClientRectangle,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
+            BackColor = Color.FromArgb(0x17, 0x16, 0x15),
+            Visible = false,
+        };
+        scrim.Click += (_, _) => CloseSettings();   // 카드 바깥을 누르면 닫는다
+        Controls.Add(scrim);
+
+        var sheet = new RoundPanel(Ui.Bg, Color.FromArgb(0x17, 0x16, 0x15)) { Radius = 14 };
+        scrim.Controls.Add(sheet);
+        center = () =>
+        {
+            var w = Math.Min(880, Math.Max(520, scrim.Width - 180));
+            var h = Math.Min(540, Math.Max(360, scrim.Height - 160));
+            sheet.SetBounds((scrim.Width - w) / 2, (scrim.Height - h) / 2, w, h);
+        };
+        scrim.Resize += (_, _) => center();
+
+        // 시트 안쪽 여백이 없으면 네모난 자식 패널이 둥근 모서리를 덮어 각져 보인다
+        sheet.Padding = new Padding(10);
+
+        var nav = new Panel { Dock = DockStyle.Left, Width = 166, BackColor = Ui.Bg, Padding = new Padding(14, 6, 8, 14) };
+        var body = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Bg, Padding = new Padding(8, 6, 28, 20) };
+        var header = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = Ui.Bg };
+
+        // 도킹은 나중에 넣은 쪽이 먼저 자리를 뗀다 — 머리줄이 가로 전체를 먹어야 하므로 마지막에 넣는다
+        sheet.Controls.Add(body);
+        sheet.Controls.Add(nav);
+        sheet.Controls.Add(header);
+
+        sections.Add(SectionKey());
+        sections.Add(SectionFolder());
+        sections.Add(SectionAbout());
+        foreach (var s in sections) body.Controls.Add(s);
+
+        // Dock=Top 은 나중에 넣은 쪽이 위로 간다 — 순서를 뒤집어 넣는다
+        var names = new[] { "API 키", "저장 위치", "정보" };
+        for (var i = names.Length - 1; i >= 0; i--)
+        {
+            var n = i;
+            var b = new RoundButton
+            {
+                Text = names[i],
+                Dock = DockStyle.Top,
+                Height = 34,
+                Font = Ui.Meta,
+                Radius = 8,
+                Border = Color.Transparent,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Margin = new Padding(0, 0, 0, 4),
+            };
+            b.Click += (_, _) => ShowSection(n);
+            nav.Controls.Add(b);
+            navs.Insert(0, b);
+        }
+
+        header.Controls.Add(new Label
+        {
+            Text = "설정",
+            Font = Ui.Strong,
+            ForeColor = Ui.Fg,
+            BackColor = Ui.Bg,
+            Bounds = new Rectangle(14, 12, 120, 24),
+        });
+
+        var close = new RoundButton
+        {
+            Text = "✕",
+            Size = new Size(30, 30),
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            Location = new Point(header.Width - 38, 6),
+            Font = Ui.Meta,
+            Radius = 8,
+            Fill = Ui.Bg,
+            Border = Color.Transparent,
+            ForeColor = Ui.Muted,
+        };
+        close.Click += (_, _) => CloseSettings();
+        header.Controls.Add(close);
+    }
+
+    Panel SectionKey()
+    {
+        var p = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Bg, Visible = false };
+        p.Controls.Add(Note("NVIDIA API 키", Ui.Strong, Ui.Fg, 0, 0, 300, 24));
+        p.Controls.Add(Note("이 PC 에만 둡니다. Windows 계정으로 암호화해 저장하므로 다른 계정이나 다른 PC 에서는 풀리지 않습니다.",
+            Ui.Meta, Ui.Muted, 0, 28, 470, 36));
+
+        var card = new RoundPanel(Ui.Card, Ui.Bg)
+        {
+            Bounds = new Rectangle(0, 74, 470, 40),
+            Radius = 9,
+            Padding = new Padding(12, 10, 12, 10),
+        };
+        keyBox.Dock = DockStyle.Fill;
+        keyBox.UseSystemPasswordChar = true;
+        keyBox.BackColor = Ui.Card;
+        keyBox.ForeColor = Ui.Fg;
+        keyBox.BorderStyle = BorderStyle.None;
+        card.Controls.Add(keyBox);
+        p.Controls.Add(card);
+
+        // 붙여넣은 키가 맞는지 볼 방법이 없으면 오타를 찾을 길이 없다
+        var peek = new RoundButton { Text = "키 보기", Bounds = new Rectangle(0, 124, 90, 28), Font = Ui.Meta, Radius = 8 };
+        peek.Click += (_, _) =>
+        {
+            keyBox.UseSystemPasswordChar = !keyBox.UseSystemPasswordChar;
+            peek.Text = keyBox.UseSystemPasswordChar ? "키 보기" : "키 가리기";
+        };
+        p.Controls.Add(peek);
+
+        var get = new RoundButton { Text = "키 발급받기", Bounds = new Rectangle(98, 124, 110, 28), Font = Ui.Meta, Radius = 8 };
+        get.Click += (_, _) => Open("https://build.nvidia.com");
+        p.Controls.Add(get);
+        return p;
+    }
+
+    Panel SectionFolder()
+    {
+        var p = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Bg, Visible = false };
+        p.Controls.Add(Note("저장 위치", Ui.Strong, Ui.Fg, 0, 0, 300, 24));
+        p.Controls.Add(Note("대화(chats.json)와 키(key.dat)가 있는 곳입니다. 지우면 처음 상태로 돌아갑니다.",
+            Ui.Meta, Ui.Muted, 0, 28, 470, 36));
+        p.Controls.Add(Note(Store.Folder, Ui.Meta, Ui.UserFg, 0, 74, 470, 20));
+
+        var open = new RoundButton { Text = "폴더 열기", Bounds = new Rectangle(0, 104, 100, 28), Font = Ui.Meta, Radius = 8 };
+        open.Click += (_, _) => Open(Store.Folder);
+        p.Controls.Add(open);
+        return p;
+    }
+
+    Panel SectionAbout()
+    {
+        var p = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Bg, Visible = false };
+        var version = (Application.ProductVersion.Split('+')[0]);
+        p.Controls.Add(Note("NVIDIA 코딩 콘솔 (로컬판)", Ui.Strong, Ui.Fg, 0, 0, 300, 24));
+        p.Controls.Add(Note("버전 " + version, Ui.Meta, Ui.UserFg, 0, 28, 300, 20));
+        p.Controls.Add(Note("서버도 계정도 없습니다. 대화는 이 PC 에만 남습니다.\n"
+            + "NVIDIA 에 질문을 보낼 때만 인터넷을 씁니다.\n"
+            + "실행에는 .NET 10 데스크톱 런타임이 필요합니다.",
+            Ui.Meta, Ui.Muted, 0, 58, 470, 60));
+        return p;
+    }
+
+    static Label Note(string text, Font font, Color fore, int x, int y, int w, int h) => new()
+    {
+        Text = text,
+        Font = font,
+        ForeColor = fore,
+        BackColor = Ui.Bg,
+        Bounds = new Rectangle(x, y, w, h),
+    };
+
+    static void Open(string target) => Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
 
     void PickModel(string id)
     {
