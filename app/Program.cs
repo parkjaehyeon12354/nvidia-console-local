@@ -4,8 +4,12 @@
 // 주지 않으므로 Ui/RoundPanel/RoundButton 에서 직접 칠한다.
 // NVIDIA 호출도 프로그램이 직접 하고(Nvidia.cs), 대화와 키는 사용자 폴더에 둔다(Store.cs).
 //
-//   NvidiaConsole.exe              창을 연다
-//   NvidiaConsole.exe --selftest   화면 없이 자체 점검만 하고 끝낸다 (빌드 후 확인용)
+//   NvidiaConsole.exe                      창을 연다
+//   NvidiaConsole.exe --selftest           화면 없이 자체 점검만 하고 끝낸다 (빌드 후 확인용)
+//   NvidiaConsole.exe --shot a.png [설정]  창을 그림 한 장으로 떠서 끝낸다 (화면 확인용)
+//
+// --shot 은 화면을 캡처하지 않고 창이 스스로를 그린다. 다른 창이 앞에 있든 상관없고,
+// 남의 화면이 찍힐 일도 없다.
 
 using System.Diagnostics;
 using System.Drawing.Drawing2D;
@@ -25,7 +29,34 @@ static class Program
             return;
         }
         ApplicationConfiguration.Initialize();
+        if (args.Length > 1 && args[0] == "--shot")
+        {
+            Environment.Exit(Shot(args[1], args.Length > 2 && args[2] == "설정"));
+            return;
+        }
         Application.Run(new MainForm());
+    }
+
+    static int Shot(string path, bool settings)
+    {
+        var form = new MainForm();
+        form.Show();
+        Settle(form);
+        if (settings) { form.ShowSettings(); Settle(form); }
+
+        // 설정이 열려 있으면 창 전체를 덮는 막이 곧 화면이다. 폼째로 뜨면 자식 그리는 순서가
+        // 뒤집혀 막이 도로 가려지므로, 그때는 막을 그린다.
+        var target = settings && form.Overlay is not null ? form.Overlay : (Control)form;
+        using var bmp = new Bitmap(target.Width, target.Height);
+        target.DrawToBitmap(bmp, new Rectangle(0, 0, target.Width, target.Height));
+        bmp.Save(path);
+        Console.WriteLine("저장: " + path + "  " + target.Width + "x" + target.Height);
+        return 0;
+    }
+
+    static void Settle(Form f)
+    {
+        for (var i = 0; i < 25; i++) { Application.DoEvents(); Thread.Sleep(40); }
     }
 }
 
@@ -110,6 +141,10 @@ sealed class RoundPanel : Panel
     public Color Border = Ui.Line;
     public Color Outer = Ui.Bg;   // 둥근 모서리 바깥으로 비치는 바탕
 
+    // 바탕이 단색이 아니라 그림(흐린 화면)일 때, 모서리 밖으로 그 그림이 비쳐야 한다.
+    // 부모와 같은 크기의 그림이라 내 위치만큼 잘라 그리면 정확히 이어진다.
+    public Image? Backdrop;
+
     public RoundPanel(Color fill, Color outer)
     {
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint
@@ -120,7 +155,12 @@ sealed class RoundPanel : Panel
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        e.Graphics.Clear(Outer);
+        if (Backdrop is not null)
+            e.Graphics.DrawImage(Backdrop, new Rectangle(0, 0, Width, Height),
+                new Rectangle(Left, Top, Width, Height), GraphicsUnit.Pixel);
+        else
+            e.Graphics.Clear(Outer);
+
         Ui.Paint(e.Graphics, new Rectangle(0, 0, Width - 1, Height - 1), Radius, BackColor, Border);
     }
 }
@@ -324,6 +364,8 @@ sealed class MainForm : Form
     readonly List<Panel> sections = new();
     readonly List<RoundButton> navs = new();
     Panel? scrim;
+    RoundPanel? sheet;
+    Bitmap? frost;
     Action center = () => { };
     readonly FlowLayoutPanel codeBar = new();
     readonly Label status = new();
@@ -712,11 +754,69 @@ sealed class MainForm : Form
     // 별도 창을 띄우지 않고 창 안에서 덮는다. 뒤를 비쳐 보이게 하려면 밑에 깔린
     // 형제 컨트롤과 합성해야 하는데 WinForms 는 그걸 못 하므로, 막은 불투명하게 칠한다.
 
+    // 뒤를 가리지 않고 흐리게 남긴다. WinForms 자식 컨트롤은 형제 위에 반투명하게 얹힐 수 없으므로,
+    // 지금 화면을 한 장 떠서 흐리게 만든 뒤 그걸 막으로 깐다(그래서 뒤 화면은 멈춰 있다).
+    static Bitmap Frost(Bitmap shot)
+    {
+        var small = new Bitmap(Math.Max(1, shot.Width / 9), Math.Max(1, shot.Height / 9));
+        using (var g = Graphics.FromImage(small))
+        {
+            g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            g.DrawImage(shot, 0, 0, small.Width, small.Height);
+        }
+
+        var blurred = new Bitmap(shot.Width, shot.Height);
+        using (var g = Graphics.FromImage(blurred))
+        {
+            g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            g.PixelOffsetMode = PixelOffsetMode.Half;   // 없으면 가장자리가 잘려 테두리가 생긴다
+            g.DrawImage(small, 0, 0, blurred.Width, blurred.Height);
+            using var shade = new SolidBrush(Color.FromArgb(140, 0x14, 0x13, 0x12));
+            g.FillRectangle(shade, 0, 0, blurred.Width, blurred.Height);
+        }
+        small.Dispose();
+        return blurred;
+    }
+
+    void Blurred()
+    {
+        try
+        {
+            // DrawToBitmap 은 제목줄과 테두리까지 그린다 — 그대로 쓰면 배경이 그만큼 밀린다
+            using var whole = new Bitmap(Math.Max(1, Width), Math.Max(1, Height));
+            DrawToBitmap(whole, new Rectangle(0, 0, whole.Width, whole.Height));   // 막은 아직 숨어 있다
+
+            var edge = (Width - ClientSize.Width) / 2;
+            var caption = Height - ClientSize.Height - edge;
+            using var shot = new Bitmap(Math.Max(1, ClientSize.Width), Math.Max(1, ClientSize.Height));
+            using (var g = Graphics.FromImage(shot))
+                g.DrawImage(whole, new Rectangle(0, 0, shot.Width, shot.Height),
+                    new Rectangle(edge, caption, shot.Width, shot.Height), GraphicsUnit.Pixel);
+
+            var next = Frost(shot);
+            frost?.Dispose();
+            frost = next;
+            scrim!.BackgroundImage = frost;
+            scrim.BackgroundImageLayout = ImageLayout.Stretch;
+            if (sheet is not null) sheet.Backdrop = frost;
+        }
+        catch (Exception)
+        {
+            // 한 장 뜨는 데 실패하면 단색 막으로 물러선다 — 설정은 열려야 한다
+            scrim!.BackgroundImage = null;
+            if (sheet is not null) sheet.Backdrop = null;
+        }
+    }
+
+    internal void ShowSettings() => OpenSettings();
+    internal Control? Overlay => scrim;
+
     void OpenSettings()
     {
         if (scrim is null) BuildSettings();
         keyBox.Text = apiKey;
         ShowSection(0);
+        Blurred();                                                // 비활성화 전에 떠야 원래 모습이 남는다
         foreach (Control c in Controls) c.Enabled = c == scrim;   // 뒤로 포커스가 새지 않게
         scrim!.Bounds = ClientRectangle;
         center();                       // Resize 가 아직 안 왔을 수 있다
@@ -776,7 +876,7 @@ sealed class MainForm : Form
         scrim.Click += (_, _) => CloseSettings();   // 카드 바깥을 누르면 닫는다
         Controls.Add(scrim);
 
-        var sheet = new RoundPanel(Ui.Bg, Color.FromArgb(0x17, 0x16, 0x15)) { Radius = 14 };
+        sheet = new RoundPanel(Ui.Bg, Color.FromArgb(0x17, 0x16, 0x15)) { Radius = 14 };
         scrim.Controls.Add(sheet);
         center = () =>
         {

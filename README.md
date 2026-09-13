@@ -46,3 +46,10 @@ dotnet publish -c Release
 ```
 dist\NvidiaConsole.exe --selftest
 ```
+
+화면이 제대로 그려졌는지는 창이 스스로를 그림으로 떠서 확인합니다. 화면을 캡처하는 게 아니라서 다른 창이 앞에 있어도 상관없습니다.
+
+```
+dist\NvidiaConsole.exe --shot 창.png
+dist\NvidiaConsole.exe --shot 설정.png 설정
+```
