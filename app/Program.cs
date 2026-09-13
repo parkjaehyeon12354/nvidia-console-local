@@ -311,6 +311,100 @@ sealed class ChatList : ListBox
     }
 }
 
+// 설정 창 — 키와 저장 위치. 창을 닫아야 반영된다(취소하면 아무것도 바뀌지 않는다).
+sealed class SettingsForm : Form
+{
+    readonly TextBox key = new();
+
+    public string ApiKey => key.Text.Trim();
+
+    public SettingsForm(string apiKey)
+    {
+        Text = "설정";
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false;
+        MinimizeBox = false;
+        ShowInTaskbar = false;
+        StartPosition = FormStartPosition.CenterParent;
+        ClientSize = new Size(520, 300);
+        BackColor = Ui.Bg;
+        ForeColor = Ui.Fg;
+        Font = Ui.Body;
+        Padding = new Padding(24, 20, 24, 20);
+
+        Controls.Add(Label("NVIDIA API 키", Ui.Strong, Ui.Fg, 24, 20, 300));
+        Controls.Add(Label("이 PC 에만 둡니다. Windows 계정으로 암호화해 저장하므로 다른 계정이나 다른 PC 에서는 풀리지 않습니다.",
+            Ui.Meta, Ui.Muted, 24, 46, 472, 34));
+
+        var card = new RoundPanel(Ui.Card, Ui.Bg)
+        {
+            Bounds = new Rectangle(24, 86, 472, 40),
+            Radius = 9,
+            Padding = new Padding(12, 10, 12, 10),
+        };
+        key.Dock = DockStyle.Fill;
+        key.Text = apiKey;
+        key.UseSystemPasswordChar = true;
+        key.BackColor = Ui.Card;
+        key.ForeColor = Ui.Fg;
+        key.BorderStyle = BorderStyle.None;
+        card.Controls.Add(key);
+        Controls.Add(card);
+
+        // 붙여넣은 키가 맞는지 볼 방법이 없으면 오타를 찾을 길이 없다
+        var peek = new RoundButton { Text = "키 보기", Bounds = new Rectangle(24, 134, 90, 28), Font = Ui.Meta, Radius = 8 };
+        peek.Click += (_, _) =>
+        {
+            key.UseSystemPasswordChar = !key.UseSystemPasswordChar;
+            peek.Text = key.UseSystemPasswordChar ? "키 보기" : "키 가리기";
+        };
+        Controls.Add(peek);
+
+        var get = new RoundButton { Text = "키 발급받기", Bounds = new Rectangle(122, 134, 110, 28), Font = Ui.Meta, Radius = 8 };
+        get.Click += (_, _) => Process.Start(new ProcessStartInfo("https://build.nvidia.com") { UseShellExecute = true });
+        Controls.Add(get);
+
+        Controls.Add(Label("저장 위치", Ui.Strong, Ui.Fg, 24, 184, 300));
+        Controls.Add(Label(Store.Folder, Ui.Meta, Ui.Muted, 24, 210, 380, 20));
+
+        var open = new RoundButton { Text = "폴더 열기", Bounds = new Rectangle(406, 206, 90, 28), Font = Ui.Meta, Radius = 8 };
+        open.Click += (_, _) => Process.Start(new ProcessStartInfo(Store.Folder) { UseShellExecute = true });
+        Controls.Add(open);
+
+        var ok = new RoundButton
+        {
+            Text = "확인",
+            Bounds = new Rectangle(406, 252, 90, 32),
+            Fill = Ui.Accent,
+            Hover = Ui.AccentHi,
+            Down = Ui.Accent,
+            Border = Color.Transparent,
+            ForeColor = Ui.OnAccent,
+            DialogResult = DialogResult.OK,
+        };
+        var cancel = new RoundButton { Text = "취소", Bounds = new Rectangle(306, 252, 90, 32), DialogResult = DialogResult.Cancel };
+        Controls.Add(ok);
+        Controls.Add(cancel);
+        AcceptButton = ok;
+        CancelButton = cancel;
+    }
+
+    static Label Label(string text, Font font, Color fore, int x, int y, int w, int h = 20) => new()
+    {
+        Text = text,
+        Font = font,
+        ForeColor = fore,
+        Bounds = new Rectangle(x, y, w, h),
+        BackColor = Ui.Bg,
+    };
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        Native.DarkTitleBar(Handle);
+    }
+}
+
 sealed class MainForm : Form
 {
     readonly ChatList list = new();
@@ -319,7 +413,7 @@ sealed class MainForm : Form
     readonly RoundButton modelBtn = new();
     readonly ContextMenuStrip modelMenu = new();
     string model = "";
-    readonly TextBox keyBox = new();
+    string apiKey = "";
     readonly FlowLayoutPanel codeBar = new();
     readonly Label status = new();
     readonly Label heading = new();
@@ -349,11 +443,11 @@ sealed class MainForm : Form
         Controls.Add(new Panel { Dock = DockStyle.Left, Width = 1, BackColor = Ui.Line });
         Controls.Add(BuildSidebar());
 
-        keyBox.Text = Store.LoadKey();
+        apiKey = Store.LoadKey();
         RefreshList();
         DrawChat();
-        if (keyBox.Text.Length > 0) LoadModels();
-        else status.Text = "API 키를 넣으면 모델을 불러옵니다";
+        if (apiKey.Length > 0) LoadModels();
+        else status.Text = "왼쪽 아래 설정에서 API 키를 넣으세요";
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -372,15 +466,13 @@ sealed class MainForm : Form
             Dock = DockStyle.Left,
             Width = 268,
             ColumnCount = 1,
-            RowCount = 5,
+            RowCount = 3,
             BackColor = Ui.Side,
             Padding = new Padding(12, 14, 12, 12),
         };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
 
         var newChat = new RoundButton
         {
@@ -403,45 +495,17 @@ sealed class MainForm : Form
         list.DeleteClicked += (_, i) => Delete(i);
         root.Controls.Add(list, 0, 1);
 
-        root.Controls.Add(new Label
+        var settings = new RoundButton
         {
-            Text = "NVIDIA API 키 — 이 PC 에만 저장",
+            Text = "⚙   설정",
             Dock = DockStyle.Fill,
-            ForeColor = Ui.Muted,
             Font = Ui.Meta,
-            TextAlign = ContentAlignment.BottomLeft,
-            Margin = new Padding(2, 0, 0, 4),
-        }, 0, 2);
-
-        var keyCard = new RoundPanel(Ui.Card, Ui.Side)
-        {
-            Dock = DockStyle.Fill,
-            Radius = 9,
-            Padding = new Padding(10, 8, 10, 8),
-            Margin = new Padding(0, 0, 0, 8),
-        };
-        keyBox.Dock = DockStyle.Fill;
-        keyBox.UseSystemPasswordChar = true;
-        keyBox.BackColor = Ui.Card;
-        keyBox.ForeColor = Ui.Fg;
-        keyBox.BorderStyle = BorderStyle.None;
-        keyBox.TextChanged += (_, _) => Store.SaveKey(keyBox.Text.Trim());
-        keyBox.Leave += (_, _) => { if (keyBox.Text.Trim().Length > 0 && !HasModels()) LoadModels(); };
-        keyCard.Controls.Add(keyBox);
-        root.Controls.Add(keyCard, 0, 3);
-
-        var folder = new Label
-        {
-            Text = Store.Folder,
-            Dock = DockStyle.Fill,
-            ForeColor = Color.FromArgb(0x6b, 0x69, 0x63),
-            Font = Ui.Meta,
+            ForeColor = Ui.UserFg,
+            Border = Color.Transparent,
             TextAlign = ContentAlignment.MiddleLeft,
-            AutoEllipsis = true,
-            Margin = new Padding(2, 0, 0, 0),
         };
-        new ToolTip().SetToolTip(folder, "대화와 키가 저장되는 곳\n" + Store.Folder);
-        root.Controls.Add(folder, 0, 4);
+        settings.Click += (_, _) => OpenSettings();
+        root.Controls.Add(settings, 0, 2);
 
         return root;
     }
@@ -633,8 +697,8 @@ sealed class MainForm : Form
         view.SelectionAlignment = HorizontalAlignment.Center;
         Append("\n\n\n\n", Ui.Body, Ui.Fg, Ui.Bg);
         Append("무엇을 만들어 볼까요?\n\n", Ui.Big, Ui.Fg, Ui.Bg);
-        Append(keyBox.Text.Trim().Length == 0
-            ? "왼쪽 아래에 NVIDIA API 키를 넣으면 모델을 불러옵니다.\n"
+        Append(apiKey.Length == 0
+            ? "왼쪽 아래 설정에서 NVIDIA API 키를 넣으면 모델을 불러옵니다.\n"
             : "아래에 하고 싶은 걸 적고 Enter 를 누르세요.\n", Ui.Body, Ui.UserFg, Ui.Bg);
         Append("코드가 오면 복사 버튼이 생기고, HTML 이면 브라우저로 바로 열 수 있습니다.\n", Ui.Meta, Ui.Muted, Ui.Bg);
         view.SelectionAlignment = HorizontalAlignment.Left;
@@ -730,7 +794,26 @@ sealed class MainForm : Form
     }
 
     // ── 모델 ────────────────────────────────────────────────
-    bool HasModels() => modelMenu.Items.Count > 0;
+    void OpenSettings()
+    {
+        using var dlg = new SettingsForm(apiKey);
+        if (dlg.ShowDialog(this) != DialogResult.OK || dlg.ApiKey == apiKey) return;
+
+        apiKey = dlg.ApiKey;
+        Store.SaveKey(apiKey);
+        if (apiKey.Length > 0)
+        {
+            LoadModels();
+        }
+        else
+        {
+            modelMenu.Items.Clear();
+            model = "";
+            modelBtn.Text = NoModel;
+            status.Text = "설정에서 API 키를 넣으면 모델을 불러옵니다";
+        }
+        if (current.Messages.Count == 0) DrawChat();   // 안내 문구를 지금 상태에 맞춘다
+    }
 
     void PickModel(string id)
     {
@@ -740,7 +823,7 @@ sealed class MainForm : Form
 
     async void LoadModels()
     {
-        var key = keyBox.Text.Trim();
+        var key = apiKey;
         if (key.Length == 0) return;
         status.Text = "모델 목록 받는 중…";
         try
@@ -772,8 +855,8 @@ sealed class MainForm : Form
     {
         var text = input.Text.Trim();
         if (text.Length == 0) return;
-        var key = keyBox.Text.Trim();
-        if (key.Length == 0) { status.Text = "왼쪽 아래에 API 키를 먼저 넣어주세요"; keyBox.Focus(); return; }
+        var key = apiKey;
+        if (key.Length == 0) { status.Text = "설정에서 API 키를 먼저 넣어주세요"; OpenSettings(); return; }
         if (model.Length == 0) { status.Text = "모델을 먼저 골라주세요"; return; }
 
         input.Clear();

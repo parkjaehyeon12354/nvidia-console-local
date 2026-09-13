@@ -9,7 +9,7 @@ app/   프로그램 소스 (WinForms)
 ## 쓰는 법
 
 1. `NvidiaConsole.exe` 를 실행합니다. 파일 하나만 있으면 됩니다.
-2. 왼쪽 아래에 NVIDIA API 키를 넣습니다. 키는 [build.nvidia.com](https://build.nvidia.com) 에서 발급받습니다.
+2. 왼쪽 아래 **설정**에서 NVIDIA API 키를 넣습니다. 키는 [build.nvidia.com](https://build.nvidia.com) 에서 발급받습니다. (설정 창의 "키 발급받기" 버튼이 그 페이지를 엽니다)
 3. 입력칸 아래 **모델 이름**을 눌러 모델을 고릅니다.
 4. 입력칸에 하고 싶은 걸 적고 Enter 를 누릅니다. (줄바꿈은 Shift+Enter)
 5. 답변에 코드가 있으면 아래에 **복사 버튼**이 생깁니다. HTML 이면 **브라우저로 열기** 버튼도 같이 나옵니다.
