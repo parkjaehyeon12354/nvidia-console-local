@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    NVIDIA 코딩 콘솔 (로컬판) — 웹페이지 없이 WinForms 로 직접 그리는 프로그램.
-    빌드:  dotnet publish -c Release   →  dist\NvidiaConsole.exe (파일 하나)
+    Zako Code — 웹페이지 없이 WinForms 로 직접 그리는 코딩 도우미.
+    빌드:  dotnet publish -c Release   →  dist\ZakoCode.exe (파일 하나)
     확인:  빌드한 exe 에 selftest 옵션을 주면 화면 없이 점검만 하고 끝난다
     런타임을 품고 있어 .NET 을 따로 깔지 않아도 된다.
   -->
@@ -14,11 +14,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationIcon>icon.ico</ApplicationIcon>
-    <AssemblyName>NvidiaConsole</AssemblyName>
+    <AssemblyName>ZakoCode</AssemblyName>
     <RootNamespace>NvidiaConsole</RootNamespace>
-    <Product>NVIDIA 코딩 콘솔 (로컬)</Product>
-    <AssemblyTitle>NVIDIA 코딩 콘솔 (로컬)</AssemblyTitle>
-    <Version>2.10.0</Version>
+    <Product>Zako Code</Product>
+    <AssemblyTitle>Zako Code</AssemblyTitle>
+    <Version>2.11.0</Version>
   </PropertyGroup>
 
   <PropertyGroup>

@@ -1,6 +1,6 @@
-# NVIDIA 코딩 콘솔 (로컬판)
+# Zako Code
 
-서버도 계정도 웹페이지도 없이 **이 PC 에서만** 도는 Windows 프로그램입니다. NVIDIA API 키만 있으면 됩니다.
+서버도 계정도 웹페이지도 없이 **이 PC 에서만** 도는 Windows 프로그램입니다. API 키와 보낼 곳(Base URL)만 있으면 됩니다.
 
 ```
 app/   프로그램 소스 (WinForms)
@@ -8,12 +8,12 @@ app/   프로그램 소스 (WinForms)
 
 ## 쓰는 법
 
-1. `NvidiaConsole.exe` 를 실행합니다. 파일 하나만 있으면 됩니다.
+1. `ZakoCode.exe` 를 실행합니다. 파일 하나만 있으면 됩니다.
 2. 왼쪽 아래 **설정**에서 두 칸을 채웁니다. **둘 다 넣어야 동작합니다.**
 
    | 칸 | 넣을 것 |
    |---|---|
-   | NVIDIA API 키 | [build.nvidia.com](https://build.nvidia.com) 에서 발급 (설정 창의 "키 발급받기" 버튼이 그 페이지를 엽니다) |
+   | API 키 | [build.nvidia.com](https://build.nvidia.com) 에서 발급 (설정 창의 "키 발급받기" 버튼이 그 페이지를 엽니다) |
    | 보낼 곳 (Base URL) | NVIDIA 를 쓰면 `https://integrate.api.nvidia.com/v1`. OpenAI 호환 주소면 다른 곳도 됩니다 |
 3. 입력칸 아래 **모델 이름**을 눌러 모델을 고릅니다.
 4. 입력칸에 하고 싶은 걸 적고 Enter 를 누릅니다. (줄바꿈은 Shift+Enter)
@@ -32,7 +32,8 @@ app/   프로그램 소스 (WinForms)
 ## 어디에 저장되나
 
 **EXE 옆에는 아무것도 만들지 않습니다.** 바탕화면에 둬도 파일 하나 그대로입니다.
-전부 `%LOCALAPPDATA%\NvidiaConsole` 에 들어갑니다 (창 왼쪽 아래에 경로가 적혀 있습니다).
+전부 `%LOCALAPPDATA%\ZakoCode` 에 들어갑니다 (설정 → 저장 위치에 경로가 적혀 있습니다).
+예전 이름(NVIDIA 코딩 콘솔) 때 쓰던 `%LOCALAPPDATA%\NvidiaConsole` 의 대화·키·보낼 곳은 처음 켤 때 복사해 옵니다. 옛 폴더는 지우지 않습니다.
 
 | 파일 | 내용 |
 |---|---|
@@ -49,17 +50,17 @@ cd app
 dotnet publish -c Release
 ```
 
-`app\dist\NvidiaConsole.exe` 하나가 나옵니다.
+`app\dist\ZakoCode.exe` 하나가 나옵니다.
 
 빌드한 뒤 화면 없이 점검할 수 있습니다. 코드펜스 나누기, 대화 파일 왕복, 키 암호화 왕복, 모델 목록을 확인합니다.
 
 ```
-dist\NvidiaConsole.exe --selftest
+dist\ZakoCode.exe --selftest
 ```
 
 화면이 제대로 그려졌는지는 창이 스스로를 그림으로 떠서 확인합니다. 화면을 캡처하는 게 아니라서 다른 창이 앞에 있어도 상관없습니다.
 
 ```
-dist\NvidiaConsole.exe --shot 창.png
-dist\NvidiaConsole.exe --shot 설정.png 설정
+dist\ZakoCode.exe --shot 창.png
+dist\ZakoCode.exe --shot 설정.png 설정
 ```

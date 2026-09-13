@@ -18,8 +18,27 @@ static class Store
 {
     static readonly JsonSerializerOptions Pretty = new() { WriteIndented = true };
 
-    public static string Folder { get; } = Directory.CreateDirectory(
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NvidiaConsole")).FullName;
+    public static string Folder { get; } = Prepare(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+
+    // 이름을 NvidiaConsole 에서 Zako Code 로 바꿨다. 옛 폴더의 대화·키·보낼 곳을 새 폴더로 한 번 복사해 온다 —
+    // 이름이 바뀌었다고 기록이 사라지면 안 된다. 옛 파일은 지우지 않고, 새 쪽에 이미 있으면 덮지 않는다.
+    public static string Prepare(string localAppData)
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(localAppData, "ZakoCode")).FullName;
+        var old = Path.Combine(localAppData, "NvidiaConsole");
+        foreach (var name in new[] { "chats.json", "key.dat", "root.txt" })
+        {
+            var from = Path.Combine(old, name);
+            var to = Path.Combine(folder, name);
+            try
+            {
+                if (File.Exists(from) && !File.Exists(to)) File.Copy(from, to);
+            }
+            catch (IOException) { }                    // 못 옮겨도 켜지는 게 먼저다 — 옛 파일은 그대로 남아 있다
+            catch (UnauthorizedAccessException) { }
+        }
+        return folder;
+    }
 
     static string ChatsPath => Path.Combine(Folder, "chats.json");
     static string KeyPath => Path.Combine(Folder, "key.dat");

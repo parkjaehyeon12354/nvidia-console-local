@@ -13,7 +13,7 @@ namespace NvidiaConsole;
 static class Updater
 {
     const string Latest = "https://api.github.com/repos/parkjaehyeon12354/nvidia-console-local/releases/latest";
-    const string AssetName = "NvidiaConsole.exe";
+    const string AssetName = "ZakoCode.exe";   // 옛 앱(NvidiaConsole.exe 를 찾는)을 위해 릴리스엔 옛 이름으로도 올린다
 
     public static string Current => Application.ProductVersion.Split('+')[0];
 
@@ -23,7 +23,7 @@ static class Updater
     static HttpClient Client(TimeSpan timeout)
     {
         var c = new HttpClient { Timeout = timeout };
-        c.DefaultRequestHeaders.Add("User-Agent", "NvidiaConsole");   // 없으면 깃허브가 403 을 준다
+        c.DefaultRequestHeaders.Add("User-Agent", "ZakoCode");   // 없으면 깃허브가 403 을 준다
         c.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
         return c;
     }
@@ -68,7 +68,7 @@ static class Updater
         var bytes = await http.GetByteArrayAsync(r.Url, ct);
         if (bytes.Length < 50_000) throw new InvalidOperationException("받은 파일이 너무 작습니다");
 
-        var path = Path.Combine(Path.GetTempPath(), "NvidiaConsole-" + r.Version + ".exe");
+        var path = Path.Combine(Path.GetTempPath(), "ZakoCode-" + r.Version + ".exe");
         await File.WriteAllBytesAsync(path, bytes, ct);
         return path;
     }

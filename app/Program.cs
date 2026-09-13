@@ -1,13 +1,13 @@
-// NVIDIA 코딩 콘솔 (로컬판) — 서버도 계정도 웹페이지도 없이 도는 Windows 프로그램.
+// Zako Code — 서버도 계정도 웹페이지도 없이 도는 Windows 코딩 도우미.
 //
 // 화면은 WinForms 로 직접 그린다. 둥근 모서리·호버·눌림·플레이스홀더는 WinForms 가
 // 주지 않으므로 Ui/RoundPanel/RoundButton 에서 직접 칠한다.
 // NVIDIA 호출도 프로그램이 직접 하고(Nvidia.cs), 대화와 키는 사용자 폴더에 둔다(Store.cs).
 //
-//   NvidiaConsole.exe                      창을 연다
-//   NvidiaConsole.exe --selftest           화면 없이 자체 점검만 하고 끝낸다 (빌드 후 확인용)
-//   NvidiaConsole.exe --shot a.png [설정 [번호]]  창을 그림 한 장으로 떠서 끝낸다 (화면 확인용)
-//   NvidiaConsole.exe --shot a.png sample[-models]  가짜 기록으로 사용량 화면을 뜬다 (사용자 파일은 안 건드림)
+//   ZakoCode.exe                           창을 연다
+//   ZakoCode.exe      --selftest           화면 없이 자체 점검만 하고 끝낸다 (빌드 후 확인용)
+//   ZakoCode.exe      --shot a.png [설정 [번호]]  창을 그림 한 장으로 떠서 끝낸다 (화면 확인용)
+//   ZakoCode.exe      --shot a.png sample[-models]  가짜 기록으로 사용량 화면을 뜬다 (사용자 파일은 안 건드림)
 //
 // --shot 은 화면을 캡처하지 않고 창이 스스로를 그린다. 다른 창이 앞에 있든 상관없고,
 // 남의 화면이 찍힐 일도 없다.
@@ -414,7 +414,7 @@ sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "NVIDIA 코딩 콘솔";
+        Text = "Zako Code";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         ClientSize = new Size(1180, 820);
         MinimumSize = new Size(880, 560);
@@ -754,7 +754,7 @@ sealed class MainForm : Form
 
     static void OpenInBrowser(string html)
     {
-        var path = Path.Combine(Path.GetTempPath(), "nvidia-console-" + Guid.NewGuid().ToString("n")[..8] + ".html");
+        var path = Path.Combine(Path.GetTempPath(), "zako-code-" + Guid.NewGuid().ToString("n")[..8] + ".html");
         File.WriteAllText(path, html, Encoding.UTF8);
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
     }
@@ -1048,7 +1048,7 @@ sealed class MainForm : Form
     Panel SectionKey()
     {
         var p = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Bg, Visible = false };
-        p.Controls.Add(Note("NVIDIA API 키", Ui.Strong, Ui.Fg, 0, 0, 300, 24));
+        p.Controls.Add(Note("API 키", Ui.Strong, Ui.Fg, 0, 0, 300, 24));
 
         var card = new RoundPanel(Ui.Card, Ui.Bg)
         {
@@ -1109,7 +1109,7 @@ sealed class MainForm : Form
     Panel SectionAbout()
     {
         var p = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Bg, Visible = false };
-        p.Controls.Add(Note("NVIDIA 코딩 콘솔 (로컬판)", Ui.Strong, Ui.Fg, 0, 0, 300, 24));
+        p.Controls.Add(Note("Zako Code", Ui.Strong, Ui.Fg, 0, 0, 300, 24));
         p.Controls.Add(Note("버전 " + Updater.Current, Ui.Meta, Ui.UserFg, 0, 28, 300, 20));
 
         var check = new RoundButton { Text = "업데이트 확인", Bounds = new Rectangle(0, 60, 120, 28), Font = Ui.Meta, Radius = 8 };
@@ -1275,6 +1275,27 @@ static class SelfTest
             var (broken, _) = UsageStats.Streaks(new[] { d.AddDays(-3) }, d);
             failed += Check("연속 일수 — 현재 3 · 최장 4 · 어제까지면 이어짐 · 끊기면 0",
                 cur == 3 && longest == 4 && fromYesterday == 2 && broken == 0);
+        }
+
+        {
+            // 이름을 바꾸며 데이터 폴더도 바뀌었다 — 옛 폴더 기록을 옮겨 오되, 새 쪽이 있으면 덮지 않는다
+            var tmp = Directory.CreateTempSubdirectory("zako-selftest-").FullName;
+            try
+            {
+                var old = Directory.CreateDirectory(Path.Combine(tmp, "NvidiaConsole")).FullName;
+                File.WriteAllText(Path.Combine(old, "chats.json"), "[old]");
+                File.WriteAllText(Path.Combine(old, "root.txt"), "https://old");
+                var fresh = Store.Prepare(tmp);
+                File.WriteAllText(Path.Combine(old, "chats.json"), "[changed]");   // 두 번째로 켰을 때
+                Store.Prepare(tmp);
+                failed += Check("옛 이름 폴더에서 대화·보낼 곳을 옮겨 오고, 옛 파일은 남기고, 새 쪽은 덮지 않는다",
+                    File.ReadAllText(Path.Combine(fresh, "chats.json")) == "[old]"
+                    && File.ReadAllText(Path.Combine(fresh, "root.txt")) == "https://old"
+                    && File.Exists(Path.Combine(old, "chats.json"))
+                    && !File.Exists(Path.Combine(fresh, "key.dat")));
+            }
+            catch (Exception ex) { failed += Check("옛 폴더 옮기기 — " + ex.Message, false); }
+            finally { Directory.Delete(tmp, true); }
         }
 
         failed += Check("스트리밍 답변 · 마지막 조각의 토큰 사용량 (choices 가 빈 조각)",
