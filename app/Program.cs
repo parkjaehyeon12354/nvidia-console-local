@@ -408,7 +408,6 @@ sealed class MainForm : Form
         RefreshList();
         DrawChat();
         if (apiKey.Length > 0 && Nvidia.Root.Length > 0) LoadModels();
-        else status.Text = "설정에서 " + Missing();
 
         Shown += async (_, _) => await CheckUpdate(false);   // 창이 뜬 뒤 조용히 살펴본다
     }
@@ -510,7 +509,7 @@ sealed class MainForm : Form
         head.Controls.Add(updateBtn, 1, 0);
 
         status.AutoSize = false;
-        status.Width = 460;   // 안내 문구가 길어져 320 이면 끝 글자가 아랫줄로 떨어진다
+        status.Width = 460;   // 오류 문구는 길다 — 좁으면 끝 글자가 아랫줄로 떨어진다
         status.Dock = DockStyle.Fill;
         status.Font = Ui.Meta;
         status.ForeColor = Ui.Muted;
@@ -911,7 +910,7 @@ sealed class MainForm : Form
             modelMenu.Items.Clear();
             model = "";
             modelBtn.Text = NoModel;
-            status.Text = "설정에서 " + Missing();
+            status.Text = "";
         }
         if (current.Messages.Count == 0) DrawChat();   // 안내 문구를 지금 상태에 맞춘다
     }
@@ -1148,7 +1147,6 @@ sealed class MainForm : Form
         var key = apiKey;
         if (key.Length == 0 || Nvidia.Root.Length == 0)
         {
-            status.Text = key.Length == 0 ? "설정에서 API 키를 먼저 넣어주세요" : "설정에서 보낼 곳(Base URL)을 먼저 넣어주세요";
             OpenSettings();
             return;
         }
