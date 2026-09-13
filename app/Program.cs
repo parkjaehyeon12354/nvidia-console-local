@@ -362,6 +362,7 @@ sealed class MainForm : Form
     string model = "";
     string apiKey = "";
     readonly TextBox keyBox = new();
+    readonly TextBox rootBox = new();
     readonly List<Panel> sections = new();
     readonly List<RoundButton> navs = new();
     Panel? scrim;
@@ -403,6 +404,7 @@ sealed class MainForm : Form
         Controls.Add(BuildSidebar());
 
         apiKey = Store.LoadKey();
+        Nvidia.Root = Nvidia.Normalize(Store.LoadRoot());
         RefreshList();
         DrawChat();
         if (apiKey.Length > 0) LoadModels();
@@ -863,6 +865,7 @@ sealed class MainForm : Form
     {
         if (scrim is null) BuildSettings();
         keyBox.Text = apiKey;
+        rootBox.Text = Nvidia.Root == Nvidia.DefaultRoot ? "" : Nvidia.Root;
         ShowSection(0);
         Blurred();                                                // 비활성화 전에 떠야 원래 모습이 남는다
         foreach (Control c in Controls) c.Enabled = c == scrim;   // 뒤로 포커스가 새지 않게
@@ -880,8 +883,16 @@ sealed class MainForm : Form
         foreach (Control c in Controls) c.Enabled = true;
         input.Focus();
 
+        var nextRoot = Nvidia.Normalize(rootBox.Text);
+        var rootChanged = nextRoot != Nvidia.Root;
+        if (rootChanged)
+        {
+            Nvidia.Root = nextRoot;
+            Store.SaveRoot(nextRoot == Nvidia.DefaultRoot ? "" : nextRoot);
+        }
+
         var next = keyBox.Text.Trim();
-        if (next == apiKey) return;
+        if (next == apiKey && !rootChanged) return;
 
         apiKey = next;
         Store.SaveKey(apiKey);
@@ -1030,6 +1041,24 @@ sealed class MainForm : Form
         var get = new RoundButton { Text = "키 발급받기", Bounds = new Rectangle(98, 124, 110, 28), Font = Ui.Meta, Radius = 8 };
         get.Click += (_, _) => Open("https://build.nvidia.com");
         p.Controls.Add(get);
+
+        p.Controls.Add(Note("보낼 곳 (Base URL)", Ui.Strong, Ui.Fg, 0, 174, 300, 24));
+        p.Controls.Add(Note("비워 두면 NVIDIA 로 갑니다. OpenAI 호환 주소면 다른 곳도 됩니다.",
+            Ui.Meta, Ui.Muted, 0, 200, 470, 20));
+
+        var rootCard = new RoundPanel(Ui.Card, Ui.Bg)
+        {
+            Bounds = new Rectangle(0, 226, 470, 40),
+            Radius = 9,
+            Padding = new Padding(12, 10, 12, 10),
+        };
+        rootBox.Dock = DockStyle.Fill;
+        rootBox.BackColor = Ui.Card;
+        rootBox.ForeColor = Ui.Fg;
+        rootBox.BorderStyle = BorderStyle.None;
+        rootBox.PlaceholderText = Nvidia.DefaultRoot;
+        rootCard.Controls.Add(rootBox);
+        p.Controls.Add(rootCard);
         return p;
     }
 
@@ -1199,6 +1228,11 @@ static class SelfTest
             failed += Check("키 암호화 왕복 · 평문 아님", back == "check" && !Encoding.UTF8.GetString(blob).Contains("check"));
         }
         catch (Exception ex) { failed += Check("키 암호화 — " + ex.Message, false); }
+
+        failed += Check("보낼 곳 — 빈 칸은 기본값, 끝의 / 는 뗀다",
+            Nvidia.Normalize("  ") == Nvidia.DefaultRoot
+            && Nvidia.Normalize("https://x.test/v1/") == "https://x.test/v1"
+            && Nvidia.Normalize(" https://x.test/v1 ") == "https://x.test/v1");
 
         failed += Check("새 버전만 새 것으로 본다",
             Updater.Newer("v2.6.0", "2.5.0") && !Updater.Newer("v2.5.0", "2.5.0")

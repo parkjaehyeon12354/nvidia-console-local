@@ -50,6 +50,21 @@ static class Store
         File.WriteAllBytes(KeyPath, ProtectedData.Protect(Encoding.UTF8.GetBytes(key), null, DataProtectionScope.CurrentUser));
     }
 
+    // 보낼 곳은 비밀이 아니라 그냥 파일에 적는다. 비어 있으면 기본값을 쓴다.
+    public static void SaveRoot(string url) => File.WriteAllText(Path.Combine(Folder, "root.txt"), url);
+
+    public static string LoadRoot()
+    {
+        try
+        {
+            return File.ReadAllText(Path.Combine(Folder, "root.txt")).Trim();
+        }
+        catch (Exception)
+        {
+            return "";
+        }
+    }
+
     public static string LoadKey()
     {
         try
