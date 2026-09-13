@@ -84,7 +84,11 @@ static class Updater
         {
             "$ErrorActionPreference='Stop'",
             "while (Get-Process -Id " + Environment.ProcessId + " -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 300 }",
-            "Move-Item -LiteralPath " + Quote(Ready) + " -Destination " + Quote(target) + " -Force",
+            // 곧바로 덮어쓰면 다른 드라이브일 때 복사 도중 끊겨 반쪽짜리가 남을 수 있다.
+            // 옆에 받아 두고 같은 폴더 안에서 이름만 바꾼다 — 그건 한순간에 끝난다.
+            "Copy-Item -LiteralPath " + Quote(Ready) + " -Destination " + Quote(target + ".new") + " -Force",
+            "Move-Item -LiteralPath " + Quote(target + ".new") + " -Destination " + Quote(target) + " -Force",
+            "Remove-Item -LiteralPath " + Quote(Ready) + " -Force -ErrorAction SilentlyContinue",
             "Start-Process -FilePath " + Quote(target),
         });
 
