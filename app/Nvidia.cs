@@ -12,6 +12,9 @@ sealed class Message
 {
     public string Role { get; set; } = "";
     public string Content { get; set; } = "";
+    public long At { get; set; }          // 보내거나 받은 시각(유닉스 ms). 이 기능 전 대화는 0
+    public string? Model { get; set; }    // 답변을 만든 모델
+    public long Tokens { get; set; }      // 이 주고받기에 쓴 토큰 — 서버가 알려준 값만, 모르면 0
 }
 
 readonly record struct Block(bool IsCode, string Lang, string Text);
@@ -84,7 +87,7 @@ static class Nvidia
         Prefer.FirstOrDefault(ids.Contains) ?? ids.FirstOrDefault() ?? "";
 
     // 답변 조각이 올 때마다 onDelta 가 불린다. 백그라운드 스레드에서 불리니 화면은 호출부가 넘겨야 한다.
-    public static async Task ChatAsync(string key, string model, IEnumerable<Message> history, Action<string> onDelta, CancellationToken ct)
+    public static async Task<long> ChatAsync(string key, string model, IEnumerable<Message> history, Action<string> onDelta, CancellationToken ct)
     {
         var payload = new
         {
@@ -94,6 +97,7 @@ static class Nvidia
             max_tokens = 4096,
             temperature = 0.4,
             stream = true,
+            stream_options = new { include_usage = true },   // 마지막 조각에 토큰 사용량을 실어 달라
         };
 
         using var req = new HttpRequestMessage(HttpMethod.Post, Root + "/chat/completions")
@@ -107,6 +111,7 @@ static class Nvidia
 
         using var stream = await res.Content.ReadAsStreamAsync(ct);
         using var reader = new StreamReader(stream);
+        long tokens = 0;
         while (await reader.ReadLineAsync(ct) is { } line)
         {
             if (!line.StartsWith("data: ", StringComparison.Ordinal)) continue;
@@ -115,7 +120,13 @@ static class Nvidia
             try
             {
                 using var doc = JsonDocument.Parse(data);
-                var delta = doc.RootElement.GetProperty("choices")[0].GetProperty("delta");
+                var root = doc.RootElement;
+                if (root.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object
+                    && usage.TryGetProperty("total_tokens", out var total) && total.TryGetInt64(out var n))
+                    tokens = n;
+                // 사용량만 실린 마지막 조각은 choices 가 비어 있다 — [0] 으로 바로 집으면 터진다
+                if (!root.TryGetProperty("choices", out var choices) || choices.GetArrayLength() == 0) continue;
+                var delta = choices[0].GetProperty("delta");
                 if (delta.TryGetProperty("content", out var content) && content.GetString() is { Length: > 0 } text)
                 {
                     onDelta(text);
@@ -125,6 +136,7 @@ static class Nvidia
             catch (KeyNotFoundException) { }
             catch (InvalidOperationException) { }
         }
+        return tokens;
     }
 
     static async Task<Exception> FailureAsync(HttpResponseMessage res, CancellationToken ct)

@@ -82,7 +82,6 @@ static class Ui
     public static readonly Font Body = new("Malgun Gothic", 10F);
     public static readonly Font Meta = new("Malgun Gothic", 8.5F);
     public static readonly Font Strong = new("Malgun Gothic", 10F, FontStyle.Bold);
-    public static readonly Font Big = new("Malgun Gothic", 15F, FontStyle.Bold);
     public static readonly Font Arrow = new("Malgun Gothic", 12F);
     public static readonly Font Mono = new("Consolas", 10F);
 
@@ -375,6 +374,7 @@ sealed class MainForm : Form
     readonly Label status = new();
     readonly Label heading = new();
     readonly RoundButton send = new();
+    readonly UsagePanel usage = new();
 
     // 항목이 하나도 없으면 시스템이 흰 상자를 그린다. 안내 문구를 기본 항목으로 두면 색도 맞고 이유도 보인다.
     const string NoModel = "모델 없음 — 키를 넣으세요";
@@ -530,6 +530,9 @@ sealed class MainForm : Form
         view.DetectUrls = false;
         view.TabStop = false;
         pad.Controls.Add(view);
+        usage.Dock = DockStyle.Fill;
+        usage.Source = () => chats;
+        pad.Controls.Add(usage);
         root.Controls.Add(pad, 0, 2);
 
         codeBar.Dock = DockStyle.Fill;
@@ -636,9 +639,14 @@ sealed class MainForm : Form
         view.SelectionAlignment = HorizontalAlignment.Left;
         heading.Text = current.Messages.Count == 0 ? "새 대화" : current.Title;
 
-        if (current.Messages.Count == 0)
+        // 빈 대화에는 글 대신 사용량을 그린다 — 직접 칠한 그림이라 드래그로 선택되지 않는다
+        var empty = current.Messages.Count == 0;
+        usage.Visible = empty;
+        view.Visible = !empty;
+        if (empty)
         {
-            DrawWelcome();
+            usage.Hint = apiKey.Length == 0 || Nvidia.Root.Length == 0 ? "왼쪽 아래 설정에서 " + Missing() + "." : null;
+            usage.Invalidate();
             codeBar.Controls.Clear();
             return;
         }
@@ -670,18 +678,6 @@ sealed class MainForm : Form
         ScrollToEnd();
     }
 
-    // 빈 화면은 검은 구멍으로 두지 않는다 — 다음에 뭘 해야 하는지 적어 둔다
-    void DrawWelcome()
-    {
-        view.SelectionAlignment = HorizontalAlignment.Center;
-        Append("\n\n\n\n", Ui.Body, Ui.Fg, Ui.Bg);
-        Append("무엇을 만들어 볼까요?\n\n", Ui.Big, Ui.Fg, Ui.Bg);
-        Append(apiKey.Length == 0 || Nvidia.Root.Length == 0
-            ? "왼쪽 아래 설정에서 " + Missing() + ".\n"
-            : "아래에 하고 싶은 걸 적고 Enter 를 누르세요.\n", Ui.Body, Ui.UserFg, Ui.Bg);
-        Append("코드가 오면 복사 버튼이 생기고, HTML 이면 브라우저로 바로 열 수 있습니다.\n", Ui.Meta, Ui.Muted, Ui.Bg);
-        view.SelectionAlignment = HorizontalAlignment.Left;
-    }
 
     // RichTextBox 의 배경색은 글자 길이만큼만 칠해져 계단처럼 들쭉날쭉해진다.
     // 줄 끝을 공백으로 채워 네모로 보이게 한다 (고정폭 글꼴이라 어긋나지 않는다).
@@ -861,6 +857,8 @@ sealed class MainForm : Form
     }
 
     // 무엇이 비었는지 한 곳에서만 말한다 — 문구가 갈라지면 화면마다 다른 말을 한다
+    static long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
     string Missing() =>
         apiKey.Length == 0 && Nvidia.Root.Length == 0 ? "API 키와 보낼 곳(Base URL)을 넣으세요"
         : apiKey.Length == 0 ? "API 키를 넣으세요"
@@ -1155,7 +1153,7 @@ sealed class MainForm : Form
         input.Clear();
         // 답변을 받는 도중 다른 대화를 열어도 답변은 시작한 대화에 붙는다
         var chat = current;
-        chat.Messages.Add(new Message { Role = "user", Content = text });
+        chat.Messages.Add(new Message { Role = "user", Content = text, At = Now() });
         if (chat.Messages.Count == 1) chat.Title = text.Length > 30 ? text[..30] : text;
         DrawChat();
 
@@ -1167,7 +1165,7 @@ sealed class MainForm : Form
         streaming = new CancellationTokenSource();
         try
         {
-            await Nvidia.ChatAsync(key, model, chat.Messages, delta =>
+            var tokens = await Nvidia.ChatAsync(key, model, chat.Messages, delta =>
             {
                 acc.Append(delta);
                 BeginInvoke(() => { Append(delta, Ui.Body, Ui.Fg, Ui.Bg); ScrollToEnd(); });
@@ -1180,7 +1178,7 @@ sealed class MainForm : Form
             }
             else
             {
-                chat.Messages.Add(new Message { Role = "assistant", Content = acc.ToString() });
+                chat.Messages.Add(new Message { Role = "assistant", Content = acc.ToString(), At = Now(), Model = model, Tokens = tokens });
                 chats.RemoveAll(c => c.Id == chat.Id);
                 chats.Insert(0, chat);
                 SaveChats();
@@ -1235,6 +1233,15 @@ static class SelfTest
             Nvidia.Normalize("  ").Length == 0
             && Nvidia.Normalize("https://x.test/v1/") == "https://x.test/v1"
             && Nvidia.Normalize(" https://x.test/v1 ") == "https://x.test/v1");
+
+        {
+            var d = new DateOnly(2026, 9, 13);
+            var (cur, longest) = UsageStats.Streaks(new[] { d, d.AddDays(-1), d.AddDays(-2), d.AddDays(-5), d.AddDays(-6), d.AddDays(-7), d.AddDays(-8) }, d);
+            var (fromYesterday, _) = UsageStats.Streaks(new[] { d.AddDays(-1), d.AddDays(-2) }, d);
+            var (broken, _) = UsageStats.Streaks(new[] { d.AddDays(-3) }, d);
+            failed += Check("연속 일수 — 현재 3 · 최장 4 · 어제까지면 이어짐 · 끊기면 0",
+                cur == 3 && longest == 4 && fromYesterday == 2 && broken == 0);
+        }
 
         failed += Check("새 버전만 새 것으로 본다",
             Updater.Newer("v2.6.0", "2.5.0") && !Updater.Newer("v2.5.0", "2.5.0")

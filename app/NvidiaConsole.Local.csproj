@@ -18,7 +18,7 @@
     <RootNamespace>NvidiaConsole</RootNamespace>
     <Product>NVIDIA 코딩 콘솔 (로컬)</Product>
     <AssemblyTitle>NVIDIA 코딩 콘솔 (로컬)</AssemblyTitle>
-    <Version>2.9.1</Version>
+    <Version>2.10.0</Version>
   </PropertyGroup>
 
   <PropertyGroup>
