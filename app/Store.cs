@@ -12,7 +12,6 @@ sealed class Chat
     public string Id { get; set; } = Guid.NewGuid().ToString("n");
     public string Title { get; set; } = "새 대화";
     public List<Message> Messages { get; set; } = new();
-    public long UpdatedAt { get; set; }
 }
 
 static class Store

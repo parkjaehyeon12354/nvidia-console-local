@@ -42,8 +42,8 @@ static class Program
     {
         var form = new MainForm();
         form.Show();
-        Settle(form);
-        if (settings) { form.ShowSettings(section); Settle(form); }
+        Settle();
+        if (settings) { form.ShowSettings(section); Settle(); }
 
         // 설정이 열려 있으면 창 전체를 덮는 막이 곧 화면이다. 폼째로 뜨면 자식 그리는 순서가
         // 뒤집혀 막이 도로 가려지므로, 그때는 막을 그린다.
@@ -55,7 +55,7 @@ static class Program
         return 0;
     }
 
-    static void Settle(Form f)
+    static void Settle()
     {
         for (var i = 0; i < 25; i++) { Application.DoEvents(); Thread.Sleep(40); }
     }
@@ -773,9 +773,6 @@ sealed class MainForm : Form
 
     // ── 모델 ────────────────────────────────────────────────
     // ── 설정 ────────────────────────────────────────────────
-    // 별도 창을 띄우지 않고 창 안에서 덮는다. 뒤를 비쳐 보이게 하려면 밑에 깔린
-    // 형제 컨트롤과 합성해야 하는데 WinForms 는 그걸 못 하므로, 막은 불투명하게 칠한다.
-
     // 뒤를 가리지 않고 흐리게 남긴다. WinForms 자식 컨트롤은 형제 위에 반투명하게 얹힐 수 없으므로,
     // 지금 화면을 한 장 떠서 흐리게 만든 뒤 그걸 막으로 깐다(그래서 뒤 화면은 멈춰 있다).
     static Bitmap Frost(Bitmap shot)
@@ -1153,7 +1150,6 @@ sealed class MainForm : Form
             else
             {
                 chat.Messages.Add(new Message { Role = "assistant", Content = acc.ToString() });
-                chat.UpdatedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
                 chats.RemoveAll(c => c.Id == chat.Id);
                 chats.Insert(0, chat);
                 SaveChats();
