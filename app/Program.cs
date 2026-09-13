@@ -7,6 +7,7 @@
 //   NvidiaConsole.exe                      창을 연다
 //   NvidiaConsole.exe --selftest           화면 없이 자체 점검만 하고 끝낸다 (빌드 후 확인용)
 //   NvidiaConsole.exe --shot a.png [설정 [번호]]  창을 그림 한 장으로 떠서 끝낸다 (화면 확인용)
+//   NvidiaConsole.exe --shot a.png sample[-models]  가짜 기록으로 사용량 화면을 뜬다 (사용자 파일은 안 건드림)
 //
 // --shot 은 화면을 캡처하지 않고 창이 스스로를 그린다. 다른 창이 앞에 있든 상관없고,
 // 남의 화면이 찍힐 일도 없다.
@@ -31,16 +32,18 @@ static class Program
         ApplicationConfiguration.Initialize();
         if (args.Length > 1 && args[0] == "--shot")
         {
-            Environment.Exit(Shot(args[1], args.Length > 2 && args[2] == "설정",
-                args.Length > 3 && int.TryParse(args[3], out var n) ? n : 0));
+            var mode = args.Length > 2 ? args[2] : "";
+            Environment.Exit(Shot(args[1], mode == "설정", args.Length > 3 && int.TryParse(args[3], out var n) ? n : 0,
+                mode.StartsWith("sample", StringComparison.Ordinal) ? mode : null));
             return;
         }
         Application.Run(new MainForm());
     }
 
-    static int Shot(string path, bool settings, int section)
+    static int Shot(string path, bool settings, int section, string? sample)
     {
         var form = new MainForm();
+        if (sample is not null) form.UseSample(SampleChats(), sample == "sample-models");
         form.Show();
         Settle();
         if (settings) { form.ShowSettings(section); Settle(); }
@@ -53,6 +56,31 @@ static class Program
         bmp.Save(path);
         Console.WriteLine("저장: " + path + "  " + target.Width + "x" + target.Height);
         return 0;
+    }
+
+    // 화면 확인용 가짜 기록 150일치. 사용자 대화 파일은 건드리지 않는다.
+    static List<Chat> SampleChats()
+    {
+        var rng = new Random(7);
+        var models = new[] { "nvidia/llama-3.1-nemotron-70b-instruct", "mistralai/codestral-22b-instruct-v0.1", "mistralai/mistral-large-2-instruct" };
+        var chats = new List<Chat>();
+        for (var daysAgo = 0; daysAgo < 150; daysAgo++)
+        {
+            if (daysAgo >= 12 && rng.NextDouble() < 0.45) continue;   // 최근 12일은 매일, 그 전은 쉬는 날이 섞인다
+            var chat = new Chat { Title = "sample" };
+            for (var t = rng.Next(1, 12); t > 0; t--)
+            {
+                var at = new DateTimeOffset(DateTime.Today.AddDays(-daysAgo).AddHours(rng.Next(9, 24))).ToUnixTimeMilliseconds();
+                chat.Messages.Add(new Message { Role = "user", Content = "q", At = at });
+                chat.Messages.Add(new Message
+                {
+                    Role = "assistant", Content = "a", At = at, Tokens = rng.Next(800, 9000),
+                    Model = models[Math.Min(2, (int)(rng.NextDouble() * rng.NextDouble() * 3))],
+                });
+            }
+            chats.Add(chat);
+        }
+        return chats;
     }
 
     static void Settle()
@@ -824,6 +852,12 @@ sealed class MainForm : Form
         }
     }
 
+    internal void UseSample(IReadOnlyList<Chat> sample, bool modelsTab)
+    {
+        usage.Source = () => sample;
+        usage.ModelsTab = modelsTab;
+    }
+
     internal void ShowSettings(int section) { OpenSettings(); ShowSection(section); }
     internal Control? Overlay => scrim;
 
@@ -1243,6 +1277,39 @@ static class SelfTest
                 cur == 3 && longest == 4 && fromYesterday == 2 && broken == 0);
         }
 
+        failed += Check("스트리밍 답변 · 마지막 조각의 토큰 사용량 (choices 가 빈 조각)",
+            StreamCheck(withUsage: true) == ("안녕하세요", 1234L));
+        failed += Check("사용량을 안 주는 서버 — 답변은 받고 토큰은 0",
+            StreamCheck(withUsage: false) == ("안녕하세요", 0L));
+
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(new List<Chat>
+                { new() { Messages = { new() { Role = "assistant", Content = "x", At = 42, Model = "m", Tokens = 7 } } } });
+            var back = System.Text.Json.JsonSerializer.Deserialize<List<Chat>>(json)![0].Messages[0];
+            failed += Check("대화 파일에 시각·모델·토큰이 남는다", back.At == 42 && back.Model == "m" && back.Tokens == 7);
+        }
+
+        {
+            // 옛 대화(시각 0)는 '전체' 에만 들고, 기간을 좁히면 빠진다
+            var now = new DateTime(2026, 9, 13, 14, 0, 0);
+            long T(int daysAgo, int hour) => new DateTimeOffset(now.Date.AddDays(-daysAgo).AddHours(hour)).ToUnixTimeMilliseconds();
+            var chats = new List<Chat>
+            {
+                new() { Messages = { new() { Role = "user", Content = "a", At = T(0, 13) },
+                                     new() { Role = "assistant", Content = "b", At = T(0, 13), Model = "x/big", Tokens = 1000 } } },
+                new() { Messages = { new() { Role = "user", Content = "c", At = T(1, 13) },
+                                     new() { Role = "assistant", Content = "d", At = T(1, 13), Model = "x/big", Tokens = 500 },
+                                     new() { Role = "user", Content = "e", At = T(1, 9) },
+                                     new() { Role = "assistant", Content = "f", At = T(1, 9), Model = "y/small", Tokens = 20 } } },
+                new() { Messages = { new() { Role = "user", Content = "old" }, new() { Role = "assistant", Content = "old" } } },
+            };
+            var all = UsageStats.Compute(chats, null, now);
+            var week = UsageStats.Compute(chats, 7, now);
+            failed += Check("사용량 — 세션 3 · 메시지 8 · 토큰 1520 · 활성 2일 · 연속 2 · 13시 · x/big · 7일이면 옛 대화 빠짐",
+                all.Sessions == 3 && all.Messages == 8 && all.Tokens == 1520 && all.ActiveDays == 2 && all.Streak == 2
+                && all.PeakHour == 13 && all.TopModel == "x/big" && week.Sessions == 2 && week.Messages == 6);
+        }
+
         failed += Check("새 버전만 새 것으로 본다",
             Updater.Newer("v2.6.0", "2.5.0") && !Updater.Newer("v2.5.0", "2.5.0")
             && !Updater.Newer("v2.4.9", "2.5.0") && !Updater.Newer("최신", "2.5.0"));
@@ -1265,6 +1332,64 @@ static class SelfTest
 
         Console.WriteLine(failed == 0 ? "모두 통과" : failed + "개 실패");
         return failed == 0 ? 0 : 1;
+    }
+
+    // 가짜 OpenAI 호환 서버를 이 프로세스 안에 띄워 실제 HTTP 스트리밍으로 주고받는다 — 키도 인터넷도 필요 없다.
+    // 요청에 include_usage 가 없으면 답에 표시를 섞어 검사가 실패하게 한다.
+    static (string Text, long Tokens) StreamCheck(bool withUsage)
+    {
+        var port = FreePort();
+        using var listener = new System.Net.HttpListener();
+        listener.Prefixes.Add("http://127.0.0.1:" + port + "/");
+        listener.Start();
+
+        var serve = Task.Run(async () =>
+        {
+            var ctx = await listener.GetContextAsync();
+            var body = await new StreamReader(ctx.Request.InputStream).ReadToEndAsync();
+            ctx.Response.ContentType = "text/event-stream";
+            using (var w = new StreamWriter(ctx.Response.OutputStream, new UTF8Encoding(false)))
+            {
+                if (!body.Contains("\"include_usage\":true"))
+                    await w.WriteAsync("data: {\"choices\":[{\"delta\":{\"content\":\"[include_usage 없음]\"}}]}\n\n");
+                await w.WriteAsync("data: {\"choices\":[{\"delta\":{\"content\":\"안녕\"}}]}\n\n");
+                await w.WriteAsync("data: {\"choices\":[{\"delta\":{\"content\":\"하세요\"}}]}\n\n");
+                if (withUsage)
+                    await w.WriteAsync("data: {\"choices\":[],\"usage\":{\"prompt_tokens\":1200,\"completion_tokens\":34,\"total_tokens\":1234}}\n\n");
+                await w.WriteAsync("data: [DONE]\n\n");
+            }
+            ctx.Response.Close();
+        });
+
+        var saved = Nvidia.Root;
+        try
+        {
+            Nvidia.Root = "http://127.0.0.1:" + port + "/v1";
+            var text = new StringBuilder();
+            var tokens = Nvidia.ChatAsync("test", "m", new[] { new Message { Role = "user", Content = "hi" } },
+                d => text.Append(d), CancellationToken.None).GetAwaiter().GetResult();
+            serve.Wait(5000);
+            return (text.ToString(), tokens);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("        " + ex.Message);
+            return ("", -1);
+        }
+        finally
+        {
+            Nvidia.Root = saved;
+            listener.Stop();
+        }
+    }
+
+    static int FreePort()
+    {
+        var l = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        l.Start();
+        var port = ((System.Net.IPEndPoint)l.LocalEndpoint).Port;
+        l.Stop();
+        return port;
     }
 
     static int Check(string name, bool ok)

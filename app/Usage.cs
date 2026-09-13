@@ -67,7 +67,7 @@ sealed class UsagePanel : Control
     public Func<IReadOnlyList<Chat>> Source = () => Array.Empty<Chat>();
     public string? Hint;
 
-    bool modelsTab;
+    public bool ModelsTab;   // 화면 확인(--shot)에서 모델 탭을 바로 띄울 수 있게
     int? days;
     readonly List<(Rectangle Area, Action Click)> hits = new();
 
@@ -123,14 +123,14 @@ sealed class UsagePanel : Control
 
         var u = UsageStats.Compute(Source(), days, DateTime.Now);
 
-        var tx = Pill(g, "개요", x, y, !modelsTab, () => modelsTab = false, fromLeft: true);
-        Pill(g, "모델", tx + 4, y, modelsTab, () => modelsTab = true, fromLeft: true);
+        var tx = Pill(g, "개요", x, y, !ModelsTab, () => ModelsTab = false, fromLeft: true);
+        Pill(g, "모델", tx + 4, y, ModelsTab, () => ModelsTab = true, fromLeft: true);
         var rx = x + width;
         foreach (var (label, value) in new (string, int?)[] { ("7d", 7), ("30일", 30), ("전체", null) })
             rx = Pill(g, label, rx, y, days == value, () => days = value, fromLeft: false) - 4;
         y += 38;
 
-        if (modelsTab) PaintModels(g, u, x, y, width);
+        if (ModelsTab) PaintModels(g, u, x, y, width);
         else PaintOverview(g, u, x, y, width);
     }
 
