@@ -404,11 +404,11 @@ sealed class MainForm : Form
         Controls.Add(BuildSidebar());
 
         apiKey = Store.LoadKey();
-        Nvidia.Root = Nvidia.Normalize(Store.LoadRoot());
+        Nvidia.Root = Nvidia.Normalize(Store.LoadRoot());   // 비어 있으면 비어 있는 채로
         RefreshList();
         DrawChat();
-        if (apiKey.Length > 0) LoadModels();
-        else status.Text = "왼쪽 아래 설정에서 API 키를 넣으세요";
+        if (apiKey.Length > 0 && Nvidia.Root.Length > 0) LoadModels();
+        else status.Text = "왼쪽 아래 설정에서 " + Missing();
 
         Shown += async (_, _) => await CheckUpdate(false);   // 창이 뜬 뒤 조용히 살펴본다
     }
@@ -677,8 +677,8 @@ sealed class MainForm : Form
         view.SelectionAlignment = HorizontalAlignment.Center;
         Append("\n\n\n\n", Ui.Body, Ui.Fg, Ui.Bg);
         Append("무엇을 만들어 볼까요?\n\n", Ui.Big, Ui.Fg, Ui.Bg);
-        Append(apiKey.Length == 0
-            ? "왼쪽 아래 설정에서 NVIDIA API 키를 넣으면 모델을 불러옵니다.\n"
+        Append(apiKey.Length == 0 || Nvidia.Root.Length == 0
+            ? "왼쪽 아래 설정에서 " + Missing() + ".\n"
             : "아래에 하고 싶은 걸 적고 Enter 를 누르세요.\n", Ui.Body, Ui.UserFg, Ui.Bg);
         Append("코드가 오면 복사 버튼이 생기고, HTML 이면 브라우저로 바로 열 수 있습니다.\n", Ui.Meta, Ui.Muted, Ui.Bg);
         view.SelectionAlignment = HorizontalAlignment.Left;
@@ -861,11 +861,17 @@ sealed class MainForm : Form
         }
     }
 
+    // 무엇이 비었는지 한 곳에서만 말한다 — 문구가 갈라지면 화면마다 다른 말을 한다
+    string Missing() =>
+        apiKey.Length == 0 && Nvidia.Root.Length == 0 ? "API 키와 보낼 곳(Base URL)을 넣으세요"
+        : apiKey.Length == 0 ? "API 키를 넣으세요"
+        : "보낼 곳(Base URL)을 넣으세요";
+
     void OpenSettings()
     {
         if (scrim is null) BuildSettings();
         keyBox.Text = apiKey;
-        rootBox.Text = Nvidia.Root == Nvidia.DefaultRoot ? "" : Nvidia.Root;
+        rootBox.Text = Nvidia.Root;
         ShowSection(0);
         Blurred();                                                // 비활성화 전에 떠야 원래 모습이 남는다
         foreach (Control c in Controls) c.Enabled = c == scrim;   // 뒤로 포커스가 새지 않게
@@ -888,7 +894,7 @@ sealed class MainForm : Form
         if (rootChanged)
         {
             Nvidia.Root = nextRoot;
-            Store.SaveRoot(nextRoot == Nvidia.DefaultRoot ? "" : nextRoot);
+            Store.SaveRoot(nextRoot);
         }
 
         var next = keyBox.Text.Trim();
@@ -905,7 +911,7 @@ sealed class MainForm : Form
             modelMenu.Items.Clear();
             model = "";
             modelBtn.Text = NoModel;
-            status.Text = "설정에서 API 키를 넣으면 모델을 불러옵니다";
+            status.Text = "설정에서 " + Missing();
         }
         if (current.Messages.Count == 0) DrawChat();   // 안내 문구를 지금 상태에 맞춘다
     }
@@ -1012,12 +1018,10 @@ sealed class MainForm : Form
     {
         var p = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Bg, Visible = false };
         p.Controls.Add(Note("NVIDIA API 키", Ui.Strong, Ui.Fg, 0, 0, 300, 24));
-        p.Controls.Add(Note("이 PC 에만 둡니다. Windows 계정으로 암호화해 저장하므로 다른 계정이나 다른 PC 에서는 풀리지 않습니다.",
-            Ui.Meta, Ui.Muted, 0, 28, 470, 36));
 
         var card = new RoundPanel(Ui.Card, Ui.Bg)
         {
-            Bounds = new Rectangle(0, 74, 470, 40),
+            Bounds = new Rectangle(0, 30, 470, 40),
             Radius = 9,
             Padding = new Padding(12, 10, 12, 10),
         };
@@ -1030,7 +1034,7 @@ sealed class MainForm : Form
         p.Controls.Add(card);
 
         // 붙여넣은 키가 맞는지 볼 방법이 없으면 오타를 찾을 길이 없다
-        var peek = new RoundButton { Text = "키 보기", Bounds = new Rectangle(0, 124, 90, 28), Font = Ui.Meta, Radius = 8 };
+        var peek = new RoundButton { Text = "키 보기", Bounds = new Rectangle(0, 78, 90, 28), Font = Ui.Meta, Radius = 8 };
         peek.Click += (_, _) =>
         {
             keyBox.UseSystemPasswordChar = !keyBox.UseSystemPasswordChar;
@@ -1038,17 +1042,15 @@ sealed class MainForm : Form
         };
         p.Controls.Add(peek);
 
-        var get = new RoundButton { Text = "키 발급받기", Bounds = new Rectangle(98, 124, 110, 28), Font = Ui.Meta, Radius = 8 };
+        var get = new RoundButton { Text = "키 발급받기", Bounds = new Rectangle(98, 78, 110, 28), Font = Ui.Meta, Radius = 8 };
         get.Click += (_, _) => Open("https://build.nvidia.com");
         p.Controls.Add(get);
 
-        p.Controls.Add(Note("보낼 곳 (Base URL)", Ui.Strong, Ui.Fg, 0, 174, 300, 24));
-        p.Controls.Add(Note("비워 두면 NVIDIA 로 갑니다. OpenAI 호환 주소면 다른 곳도 됩니다.",
-            Ui.Meta, Ui.Muted, 0, 200, 470, 20));
+        p.Controls.Add(Note("보낼 곳 (Base URL)", Ui.Strong, Ui.Fg, 0, 126, 300, 24));
 
         var rootCard = new RoundPanel(Ui.Card, Ui.Bg)
         {
-            Bounds = new Rectangle(0, 226, 470, 40),
+            Bounds = new Rectangle(0, 156, 470, 40),
             Radius = 9,
             Padding = new Padding(12, 10, 12, 10),
         };
@@ -1056,7 +1058,6 @@ sealed class MainForm : Form
         rootBox.BackColor = Ui.Card;
         rootBox.ForeColor = Ui.Fg;
         rootBox.BorderStyle = BorderStyle.None;
-        rootBox.PlaceholderText = Nvidia.DefaultRoot;
         rootCard.Controls.Add(rootBox);
         p.Controls.Add(rootCard);
         return p;
@@ -1066,11 +1067,9 @@ sealed class MainForm : Form
     {
         var p = new Panel { Dock = DockStyle.Fill, BackColor = Ui.Bg, Visible = false };
         p.Controls.Add(Note("저장 위치", Ui.Strong, Ui.Fg, 0, 0, 300, 24));
-        p.Controls.Add(Note("대화(chats.json)와 키(key.dat)가 있는 곳입니다. 지우면 처음 상태로 돌아갑니다.",
-            Ui.Meta, Ui.Muted, 0, 28, 470, 36));
-        p.Controls.Add(Note(Store.Folder, Ui.Meta, Ui.UserFg, 0, 74, 470, 20));
+        p.Controls.Add(Note(Store.Folder, Ui.Meta, Ui.UserFg, 0, 30, 470, 20));
 
-        var open = new RoundButton { Text = "폴더 열기", Bounds = new Rectangle(0, 104, 100, 28), Font = Ui.Meta, Radius = 8 };
+        var open = new RoundButton { Text = "폴더 열기", Bounds = new Rectangle(0, 58, 100, 28), Font = Ui.Meta, Radius = 8 };
         open.Click += (_, _) => Open(Store.Folder);
         p.Controls.Add(open);
         return p;
@@ -1088,7 +1087,7 @@ sealed class MainForm : Form
 
         updateNote.SetBounds(130, 60, 340, 28);
         updateNote.Font = Ui.Meta;
-        updateNote.ForeColor = Ui.Muted;
+        updateNote.ForeColor = Ui.UserFg;
         updateNote.BackColor = Ui.Bg;
         updateNote.TextAlign = ContentAlignment.MiddleLeft;
         p.Controls.Add(updateNote);
@@ -1115,7 +1114,7 @@ sealed class MainForm : Form
     async void LoadModels()
     {
         var key = apiKey;
-        if (key.Length == 0) return;
+        if (key.Length == 0 || Nvidia.Root.Length == 0) return;   // 둘 다 있어야 부른다
         status.Text = "모델 목록 받는 중…";
         try
         {
@@ -1147,7 +1146,12 @@ sealed class MainForm : Form
         var text = input.Text.Trim();
         if (text.Length == 0) return;
         var key = apiKey;
-        if (key.Length == 0) { status.Text = "설정에서 API 키를 먼저 넣어주세요"; OpenSettings(); return; }
+        if (key.Length == 0 || Nvidia.Root.Length == 0)
+        {
+            status.Text = key.Length == 0 ? "설정에서 API 키를 먼저 넣어주세요" : "설정에서 보낼 곳(Base URL)을 먼저 넣어주세요";
+            OpenSettings();
+            return;
+        }
         if (model.Length == 0) { status.Text = "모델을 먼저 골라주세요"; return; }
 
         input.Clear();
@@ -1229,8 +1233,8 @@ static class SelfTest
         }
         catch (Exception ex) { failed += Check("키 암호화 — " + ex.Message, false); }
 
-        failed += Check("보낼 곳 — 빈 칸은 기본값, 끝의 / 는 뗀다",
-            Nvidia.Normalize("  ") == Nvidia.DefaultRoot
+        failed += Check("보낼 곳 — 빈 칸은 빈 칸, 끝의 / 는 뗀다",
+            Nvidia.Normalize("  ").Length == 0
             && Nvidia.Normalize("https://x.test/v1/") == "https://x.test/v1"
             && Nvidia.Normalize(" https://x.test/v1 ") == "https://x.test/v1");
 
@@ -1246,6 +1250,8 @@ static class SelfTest
 
         try
         {
+            // 앱은 보낼 곳을 사용자가 넣지만, 점검은 넣어 줄 사람이 없으니 여기서 정한다
+            Nvidia.Root = "https://integrate.api.nvidia.com/v1";
             var ids = Nvidia.ModelsAsync(key).GetAwaiter().GetResult();
             failed += Check("모델 " + ids.Count + "개 · 기본값 " + Nvidia.PickDefault(ids),
                 ids.Count > 0 && !ids.Any(id => id.Contains("embed", StringComparison.OrdinalIgnoreCase)));

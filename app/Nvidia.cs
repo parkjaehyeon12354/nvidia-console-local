@@ -42,17 +42,11 @@ static class Fences
 
 static class Nvidia
 {
-    public const string DefaultRoot = "https://integrate.api.nvidia.com/v1";
+    /// 보낼 곳. 사용자가 설정에 넣어야 한다 — 기본값을 숨겨 두지 않는다.
+    public static string Root { get; set; } = "";
 
-    /// 보낼 곳. OpenAI 호환 엔드포인트면 무엇이든 된다.
-    public static string Root { get; set; } = DefaultRoot;
-
-    /// 빈 칸이면 기본값으로, 끝의 / 는 떼고 쓴다 (안 그러면 //models 가 된다).
-    public static string Normalize(string url)
-    {
-        url = url.Trim().TrimEnd('/');
-        return url.Length == 0 ? DefaultRoot : url;
-    }
+    /// 끝의 / 는 떼고 쓴다 (안 그러면 //models 가 된다).
+    public static string Normalize(string url) => url.Trim().TrimEnd('/');
 
     const string SystemPrompt = "너는 숙련된 개발자다. 코드는 반드시 언어를 명시한 코드펜스로 감싸고, 설명은 간결하게 한국어로 한다.";
 
