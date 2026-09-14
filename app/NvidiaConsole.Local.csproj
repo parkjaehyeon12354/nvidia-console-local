@@ -18,7 +18,9 @@
     <RootNamespace>NvidiaConsole</RootNamespace>
     <Product>Zako Code</Product>
     <AssemblyTitle>Zako Code</AssemblyTitle>
-    <Version>2.12.0</Version>
+    <!-- 2026-09-15 안드로이드 판·폰 터미널판과 번호를 맞추려고 2.12.0 에서 1.0.1 로 내렸다.
+         그래서 2.x 앱은 1.x 를 새 버전으로 보지 않는다 (옛 v1.0.0 태그가 있어 1.0.0 은 못 쓴다) -->
+    <Version>1.0.1</Version>
   </PropertyGroup>
 
   <PropertyGroup>

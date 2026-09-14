@@ -22,6 +22,7 @@ try:
 except ImportError:
     pass
 
+VERSION = '1.0.1'   # PC 판·안드로이드 판과 같은 번호
 CONF = os.path.join(os.path.expanduser('~'), '.zako', 'config.json')
 MAX_STEPS = 20      # 한 질문에 명령을 연달아 돌리는 횟수 상한 — 같은 명령을 끝없이 되풀이하는 모델이 있다
 OUT_LIMIT = 4000    # AI 에게 돌려줄 출력 길이. 넘으면 뒤쪽만 보낸다 (에러는 보통 끝에 있다)
@@ -190,7 +191,7 @@ def main():
         pick(conf)
     approve = asker()
     messages = [{'role': 'system', 'content': system_prompt()}]
-    print(f'Zako Code · {conf["model"]} · /설정 /모델 /새대화 /종료')
+    print(f'Zako Code {VERSION} · {conf["model"]} · /설정 /모델 /새대화 /종료')
 
     while True:
         try:
