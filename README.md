@@ -1,9 +1,11 @@
 # Zako Code
 
 서버도 계정도 웹페이지도 없이 **이 PC 에서만** 도는 Windows 프로그램입니다. API 키와 보낼 곳(Base URL)만 있으면 됩니다.
+폰(갤럭시·아이폰)에서는 [터미널판](#폰에서-갤럭시아이폰)을 씁니다.
 
 ```
-app/   프로그램 소스 (WinForms)
+app/      프로그램 소스 (WinForms)
+mobile/   폰 터미널판 (파이썬 파일 하나)
 ```
 
 ## 쓰는 법
@@ -28,6 +30,36 @@ app/   프로그램 소스 (WinForms)
 - 처음 받아 실행하면 "Windows의 PC 보호" 경고가 뜰 수 있습니다. 서명하지 않은 EXE 라서입니다 — "추가 정보 → 실행".
 - `Program Files` 처럼 쓰기 권한이 없는 폴더에 두면 자동 업데이트가 파일을 바꾸지 못합니다. 바탕화면이나 다운로드 폴더에 두세요.
 - 인터넷은 필요합니다. NVIDIA 에 질문을 보내는 건 인터넷을 씁니다 — "로컬"은 **우리 서버가 없다**는 뜻입니다.
+
+## 폰에서 (갤럭시·아이폰)
+
+폰에서는 창 대신 **터미널에서** 씁니다. Claude Code 처럼 AI 가 명령을 직접 실행하며 일합니다 — AI 가 명령을 내면 실행할지 묻고, 결과를 보고 다음 명령을 정합니다.
+
+| 폰 | 앱 | 처음 한 번 |
+|---|---|---|
+| 갤럭시 | Termux ([F-Droid](https://f-droid.org/packages/com.termux/) 에서 받기) | `pkg install -y python curl` |
+| 아이폰 | iSH Shell (App Store) | `apk add python3 curl` |
+
+받아서 실행합니다.
+
+```
+curl -o zako.py https://raw.githubusercontent.com/parkjaehyeon12354/zako-code/main/mobile/zako.py
+python3 zako.py
+```
+
+처음 켜면 API 키 → 보낼 곳(Base URL) → 모델 번호를 묻습니다. 폰의 `~/.zako/config.json` 에 본인만 읽을 수 있게 저장합니다. PC 의 키 파일은 Windows 계정에 묶여 있어 옮겨지지 않으니 폰에서 한 번 더 넣으세요.
+
+AI 가 명령을 내면 이렇게 답합니다.
+
+| 입력 | 뜻 |
+|---|---|
+| `y` | 이 명령을 실행 |
+| `a` | 끌 때까지 묻지 않고 전부 실행 |
+| Enter | 실행하지 않고 AI 에게 거절했다고 알림 |
+
+- 명령어: `/설정` `/모델` `/새대화` `/종료`. 답변 도중 Ctrl+C 로 멈춥니다.
+- 대화 내역과 사용량 대시보드는 없습니다. 끄면 대화가 사라집니다.
+- 새 버전은 위 `curl` 줄을 다시 실행하면 받아집니다.
 
 ## 어디에 저장되나
 
@@ -63,4 +95,10 @@ dist\ZakoCode.exe --selftest
 ```
 dist\ZakoCode.exe --shot 창.png
 dist\ZakoCode.exe --shot 설정.png 설정
+```
+
+폰 터미널판은 가짜 서버를 띄워 명령 실행 흐름을 점검합니다.
+
+```
+python3 mobile/zako.py --selftest
 ```
