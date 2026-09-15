@@ -999,6 +999,22 @@ sealed class MainForm : Form
         sections.Add(SectionAbout());
         foreach (var s in sections) body.Controls.Add(s);
 
+        // 사용 설명서는 이 창의 칸이 아니라 깃허브 문서를 연다. 먼저 넣어야 목록 맨 아래에 붙는다
+        var guide = new RoundButton
+        {
+            Text = "사용 설명서",
+            Dock = DockStyle.Top,
+            Height = 34,
+            Font = Ui.Meta,
+            Radius = 8,
+            Fill = Ui.Bg,
+            Border = Color.Transparent,
+            ForeColor = Ui.UserFg,
+            TextAlign = ContentAlignment.MiddleLeft,
+        };
+        guide.Click += (_, _) => Open("https://github.com/parkjaehyeon12354/zako-code/blob/main/docs/guide.md");
+        nav.Controls.Add(guide);
+
         // Dock=Top 은 나중에 넣은 쪽이 위로 간다 — 순서를 뒤집어 넣는다
         var names = new[] { "API 키", "저장 위치", "정보" };
         for (var i = names.Length - 1; i >= 0; i--)
